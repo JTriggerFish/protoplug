@@ -42,8 +42,11 @@ LuaState::LuaState(File defaultDir)
 	String libName2 = "libluajit-5.1.so.2";
 #endif
 	String defaultPath = defaultDir.getChildFile(libName).getFullPathName();
-	if (!dll) {
+	if (!dll)
+    {
 		dll = new DynamicLibrary();
+        //throw "Library loading error";
+        
 		if (!dll->open(defaultPath))
 			if (!dll->open(libName2))
 				dll->open(libName);
