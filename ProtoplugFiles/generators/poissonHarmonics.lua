@@ -7,52 +7,65 @@ author: JT Marin
 --]]
 
 require "include/protoplug"
-prng = require "sci.prng"
 dist = require "sci.dist"
+math = require "sci.math"
 
 -- Initialise the random number generator
 math.randomseed(os.time())
 math.random(); math.random(); math.random()
+
+math.boxMuller = function()
+	local U1 = math.random()
+	local U2 = math.random()
+	return math.sqrt(-2*math.log(U1))*math.cos(2*math.pi*U2),
+			math.sqrt(-2*math.log(U1))*math.sin(2*math.pi*U2)
+end
+
+math.gaussianRandom = function(mean, stdDev)
+	return math.boxMuller() * stdDev + mean
+end
 
 -- Default base note : A 440hz at half velocity
 local baseNote = { note = 69, velocity = 69 }
 
 
 --Poisson event based random time midi note generator
-local DustGenerator = {lambda = 1.0, sampleRate = 44100,
+local DustGenerator = {lambda = 1 / 0.3, sampleRate = 44100,
 					   channel = 1,
-					   nextEventTime = 1.0, --[[in seconds--]]
+					   nextEventSample = 1.0*44100,
 					   blockCount = 0
 					   }
 					
 
 function DustGenerator:generateEvent(noteGen, velocityGen, smax, midiBuf)
-	function nextPoissonEventTime(lambda) 
+	function nextPoissonEventSample(lambda) 
 		local U = math.random()
-		return -math.log(U) / lambda
+		return (-math.log(U) / lambda) * self.sampleRate
+		--return 0.03 * self.sampleRate
 	end
 	
 	self.blockCount = self.blockCount + 1
 	
-	local blockNum     = math.floor(self.nextEventTime * self.sampleRate / smax)
-	local sampleOffset = self.nextEventTime * self.sampleRate - blockNum * smax
-  	local timeOffset   = sampleOffset / self.sampleRate
+	local blockNum     = math.floor(self.nextEventSample  / smax)
+	local sampleOffset = self.nextEventSample  - blockNum * smax
 	
-	if blockNum == blockCount then
+	if blockNum == self.blockCount then
 		::eventInBlock::
 		
-		event = midi.Event.noteOn (self.channel, noteGen(), velocityGen(), sampleOffset)
-		midiBuf:addEvent(event)
-		self.nextEventTime = nextPoissonEventTime(self.lambda) + timeOffset
+		--Only send a short pulse
+		local eventOn = midi.Event.noteOn (self.channel, noteGen(), velocityGen(), sampleOffset)
+		midiBuf:addEvent(eventOn)
+		local eventOff = midi.Event.noteOff(self.channel, eventOn:getNote(), 0, math.min(smax, sampleOffset+1))
+		midiBuf:addEvent(eventOff)
+		self.nextEventSample = nextPoissonEventSample(self.lambda) + sampleOffset
 		
-    		blockNum     = math.floor(self.nextEventTime * self.sampleRate / smax)
+        blockNum     = math.floor(self.nextEventSample / smax)
 		if blockNum == 0 then
-      			sampleOffset = self.nextEventTime * self.sampleRate - blockNum * smax
-		 	timeOffset   = sampleOffset / self.sampleRate
+            sampleOffset = self.nextEventSample - blockNum * smax
 		 	goto eventInBlock
 		end
 		
-		blockCount = 0
+		self.blockCount = 0
 	end
 end
 
@@ -72,9 +85,9 @@ end
 
 function harmonicNoteGen(baseMidiNote)
 	local baseFreq = midiToFreq(baseMidiNote)
-	local maxFreq  = midiToFreq(128)
+	local maxFreq  = midiToFreq(127)
 	local harmonicNotes = {}
-	for i = 1, 128 do
+	for i = 1, 127 do
 		local freq = baseFreq * i
 		if freq > maxFreq then break end
 		harmonicNotes[i] = freqToMidi(freq)
@@ -83,7 +96,7 @@ function harmonicNoteGen(baseMidiNote)
   --[[for _,n in ipairs(harmonicNotes) do
     io.write(string.format("%d : %.3f\n", n, midiToFreq(n))) 
   end]]--
-  local lambda = 0.2 --Make this lower to get more higher harmonics
+  local lambda = 0.3 --Make this lower to get more higher harmonics
 	return function()
 		local idx = math.min(1 + math.floor(-math.log(math.random()) / lambda), len)
 		return harmonicNotes[idx]
@@ -92,19 +105,20 @@ function harmonicNoteGen(baseMidiNote)
 end
 
 function gaussianVelGen(center, dev)
-	local rng = prng.std()
-	local gaussian = dist.normal(center, dev)
+	--print(rng:sample())
 	
 	return function()
-		local s = math.floor(gaussian:sample(rng))
-		s = math.max(1, math.min(s, 128))
-    return s
+		local s = math.gaussianRandom(center,dev)
+		s = math.max(1, math.min(s, 127))
+		--print(s)
+		return s
 	end
 end
 
 
 function plugin.processBlock(samples, smax, midiBuf)
 	DustGenerator.sampleRate = plugin.isSampleRateKnown() and plugin.getSampleRate() or 44100
+	--print(DustGenerator.sampleRate)
 	local inputNotes = {}
 	local i = 1
 	
@@ -112,6 +126,7 @@ function plugin.processBlock(samples, smax, midiBuf)
 	]]--
 	for ev in midiBuf:eachEvent() do
 		if ev:isNoteOn() then
+		    --print(ev:getNote())
 			inputNotes[i] = ev
 			i = i+1
 		end

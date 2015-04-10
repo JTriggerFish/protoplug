@@ -8,13 +8,11 @@ author: JT Marin
 
 require "include/protoplug"
 prng = require "sci.prng"
+dist = require "sci.dist"
 
 -- Initialise the random number generator
 math.randomseed(os.time())
 math.random(); math.random(); math.random()
-
---scilua random number generator:
-local sciRng = prng.std()
 
 -- Default base note : A 440hz at half velocity
 local baseNote = { note = 69, velocity = 69 }
@@ -29,7 +27,6 @@ local DustGenerator = {lambda = 1.0, sampleRate = 44100,
 					
 
 function DustGenerator:generateEvent(noteGen, velocityGen, smax, midiBuf)
-
 	function nextPoissonEventTime(lambda) 
 		local U = math.random()
 		return -math.log(U) / lambda
@@ -37,27 +34,26 @@ function DustGenerator:generateEvent(noteGen, velocityGen, smax, midiBuf)
 	
 	self.blockCount = self.blockCount + 1
 	
-	local div = self.nextEventTime / self.sampleRate
-	local blockNum = math.floor(div)
-	local timeOffset = (div - blockNum)
+	local blockNum     = math.floor(self.nextEventTime * self.sampleRate / smax)
+	local sampleOffset = self.nextEventTime * self.sampleRate - blockNum * smax
+  	local timeOffset   = sampleOffset / self.sampleRate
 	
 	if blockNum == blockCount then
 		::eventInBlock::
 		
-		event = midi.Event.noteOn (self.channel, noteGen(), velolicityGen(),
-		 						timeOffset*self.sampleRate)
+		event = midi.Event.noteOn (self.channel, noteGen(), velocityGen(), sampleOffset)
 		midiBuf:addEvent(event)
 		self.nextEventTime = nextPoissonEventTime(self.lambda) + timeOffset
 		
-		blockNum = math.floor(self.nextEventTime / sampleRate)
+    		blockNum     = math.floor(self.nextEventTime * self.sampleRate / smax)
 		if blockNum == 0 then
-		 	timeOffset = self.nextEventTime / sampleRate - blockNum
+      			sampleOffset = self.nextEventTime * self.sampleRate - blockNum * smax
+		 	timeOffset   = sampleOffset / self.sampleRate
 		 	goto eventInBlock
 		end
 		
 		blockCount = 0
 	end
-	
 end
 
 --Take a nunmber between 0 and 1 and map it exponentionally between low and high
@@ -66,7 +62,7 @@ function expRange(x, low, high)
 end
 
 function midiToFreq(midiNote)
-	return 440.0 * math.pow(2.0, (baseMidiNote - 69)/12)
+	return 440.0 * math.pow(2.0, (midiNote - 69)/12)
 end
 
 function freqToMidi(freq)
@@ -78,20 +74,37 @@ function harmonicNoteGen(baseMidiNote)
 	local baseFreq = midiToFreq(baseMidiNote)
 	local maxFreq  = midiToFreq(128)
 	local harmonicNotes = {}
-	for i = 0, 10 do
-		local freq = baseFreq * ( 2 ^ i )
+	for i = 1, 128 do
+		local freq = baseFreq * i
 		if freq > maxFreq then break end
-		harmonicNotes[i] = freqToMidi(freq) 
+		harmonicNotes[i] = freqToMidi(freq)
 	end
+	local len = #harmonicNotes
+  --[[for _,n in ipairs(harmonicNotes) do
+    io.write(string.format("%d : %.3f\n", n, midiToFreq(n))) 
+  end]]--
+  local lambda = 0.2 --Make this lower to get more higher harmonics
 	return function()
-		end
+		local idx = math.min(1 + math.floor(-math.log(math.random()) / lambda), len)
+		return harmonicNotes[idx]
+  end
+  
 end
 
-function gaussianVelGen(baseVel)
+function gaussianVelGen(center, dev)
+	local rng = prng.std()
+	local gaussian = dist.normal(center, dev)
+	
+	return function()
+		local s = math.floor(gaussian:sample(rng))
+		s = math.max(1, math.min(s, 128))
+    return s
+	end
+end
 
 
 function plugin.processBlock(samples, smax, midiBuf)
-	DustGenerator.sampleRate = plugin.getSampleRate()
+	DustGenerator.sampleRate = plugin.isSampleRateKnown() and plugin.getSampleRate() or 44100
 	local inputNotes = {}
 	local i = 1
 	
@@ -111,28 +124,9 @@ function plugin.processBlock(samples, smax, midiBuf)
 
 	-- fill midi buffer with prepared notes
 	midiBuf:clear()
-	if #blockEvents>0 then
-		for _,e in ipairs(blockEvents) do
-			midiBuf:addEvent(e)
-		end
-	end
+	DustGenerator:generateEvent(harmonicNoteGen(baseNote.note), 
+					gaussianVelGen(baseNote.velocity, 30), smax, midiBuf)
+	
 end
 
-function chordOn(root)
-	for _, offset in ipairs(chordStructure) do
-		local newEv = midi.Event.noteOn(
-			root:getChannel(), 
-			root:getNote()+offset, 
-			root:getVel())
-		table.insert(blockEvents, newEv)
-	end
-end
 
-function chordOff(root)
-	for _, offset in ipairs(chordStructure) do
-		local newEv = midi.Event.noteOff(
-			root:getChannel(), 
-			root:getNote()+offset)
-		table.insert(blockEvents, newEv)
-	end
-end
