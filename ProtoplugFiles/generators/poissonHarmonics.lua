@@ -27,7 +27,6 @@ local DustGenerator = {lambda = 1.0, sampleRate = 44100,
 					
 
 function DustGenerator:generateEvent(noteGen, velocityGen, smax, midiBuf)
-
 	function nextPoissonEventTime(lambda) 
 		local U = math.random()
 		return -math.log(U) / lambda
@@ -35,27 +34,26 @@ function DustGenerator:generateEvent(noteGen, velocityGen, smax, midiBuf)
 	
 	self.blockCount = self.blockCount + 1
 	
-	local div = self.nextEventTime / self.sampleRate
-	local blockNum = math.floor(div)
-	local timeOffset = (div - blockNum)
+	local blockNum     = math.floor(self.nextEventTime * self.sampleRate / smax)
+	local sampleOffset = self.nextEventTime * self.sampleRate - blockNum * smax
+  	local timeOffset   = sampleOffset / self.sampleRate
 	
 	if blockNum == blockCount then
 		::eventInBlock::
 		
-		event = midi.Event.noteOn (self.channel, noteGen(), velolicityGen(),
-		 						timeOffset*self.sampleRate)
+		event = midi.Event.noteOn (self.channel, noteGen(), velocityGen(), sampleOffset)
 		midiBuf:addEvent(event)
 		self.nextEventTime = nextPoissonEventTime(self.lambda) + timeOffset
 		
-		blockNum = math.floor(self.nextEventTime / sampleRate)
+    		blockNum     = math.floor(self.nextEventTime * self.sampleRate / smax)
 		if blockNum == 0 then
-		 	timeOffset = self.nextEventTime / sampleRate - blockNum
+      			sampleOffset = self.nextEventTime * self.sampleRate - blockNum * smax
+		 	timeOffset   = sampleOffset / self.sampleRate
 		 	goto eventInBlock
 		end
 		
 		blockCount = 0
 	end
-	
 end
 
 --Take a nunmber between 0 and 1 and map it exponentionally between low and high
@@ -76,16 +74,21 @@ function harmonicNoteGen(baseMidiNote)
 	local baseFreq = midiToFreq(baseMidiNote)
 	local maxFreq  = midiToFreq(128)
 	local harmonicNotes = {}
-	for i = 1, 9 do
-		local freq = baseFreq * ( 2 ^ (i-1) )
+	for i = 1, 128 do
+		local freq = baseFreq * i
 		if freq > maxFreq then break end
 		harmonicNotes[i] = freqToMidi(freq)
 	end
 	local len = #harmonicNotes
+  --[[for _,n in ipairs(harmonicNotes) do
+    io.write(string.format("%d : %.3f\n", n, midiToFreq(n))) 
+  end]]--
+  local lambda = 0.2 --Make this lower to get more higher harmonics
 	return function()
-		local idx = math.random(1, len)
+		local idx = math.min(1 + math.floor(-math.log(math.random()) / lambda), len)
 		return harmonicNotes[idx]
-		end
+  end
+  
 end
 
 function gaussianVelGen(center, dev)
@@ -94,7 +97,8 @@ function gaussianVelGen(center, dev)
 	
 	return function()
 		local s = math.floor(gaussian:sample(rng))
-		s = math.max(0, math.min(s, 128))
+		s = math.max(1, math.min(s, 128))
+    return s
 	end
 end
 
