@@ -1,14 +1,15 @@
 --[[
 name: poisson Harmonics
-description: MIDI generator VST/AU. Generate notes in the harmonics series
+description: MIDI generator VST/AU. Generate note triggers in the harmonics series
             of the last pressed key, with arrival times determined by a poisson
             process of which the intensity can be changed.
+            The velocity is also random following a gaussian distribution
 author: JT Marin
 --]]
 
 require "include/protoplug"
-dist = require "sci.dist"
-math = require "sci.math"
+--dist = require "sci.dist"
+--math = require "sci.math"
 
 -- Initialise the random number generator
 math.randomseed(os.time())
