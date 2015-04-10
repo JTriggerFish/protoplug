@@ -104,7 +104,7 @@ end
 
 
 function plugin.processBlock(samples, smax, midiBuf)
-	DustGenerator.sampleRate = plugin.getSampleRate()
+	DustGenerator.sampleRate = plugin.isSampleRateKnown() and plugin.getSampleRate() or 44100
 	local inputNotes = {}
 	local i = 1
 	
