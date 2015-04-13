@@ -8,23 +8,11 @@ author: JT Marin
 --]]
 
 require "include/protoplug"
+am = require "include/audioMath"
 --dist = require "sci.dist"
 --math = require "sci.math"
 
--- Initialise the random number generator
-math.randomseed(os.time())
-math.random(); math.random(); math.random()
 
-math.boxMuller = function()
-	local U1 = math.random()
-	local U2 = math.random()
-	return math.sqrt(-2*math.log(U1))*math.cos(2*math.pi*U2),
-			math.sqrt(-2*math.log(U1))*math.sin(2*math.pi*U2)
-end
-
-math.gaussianRandom = function(mean, stdDev)
-	return math.boxMuller() * stdDev + mean
-end
 
 -- Default base note : A 440hz at half velocity
 local baseNote = { note = 69, velocity = 69 }
@@ -33,12 +21,11 @@ local baseNote = { note = 69, velocity = 69 }
 --Poisson event based random time midi note generator
 local DustGenerator = {lambda = 1 / 0.3, sampleRate = 44100,
 					   channel = 1,
-					   nextEventSample = 1.0*44100,
-					   blockCount = 0
+					   blockTillEvents = 0
 					   }
 					
-
-function DustGenerator:generateEvent(noteGen, velocityGen, smax, midiBuf)
+-- Wait until the next block of events then creates new events to fill another block at least
+function DustGenerator:generateEvents(noteGen, velocityGen, smax, midiBuf)
 	function nextPoissonEventSample(lambda) 
 		local U = math.random()
 		return (-math.log(U) / lambda) * self.sampleRate
@@ -46,6 +33,10 @@ function DustGenerator:generateEvent(noteGen, velocityGen, smax, midiBuf)
 	end
 	
 	self.blockCount = self.blockCount + 1
+  
+  --Events in this block, we need to generate the next set
+  if blockTillEvents == 0 then
+  end
 	
 	local blockNum     = math.floor(self.nextEventSample  / smax)
 	local sampleOffset = self.nextEventSample  - blockNum * smax
@@ -70,18 +61,6 @@ function DustGenerator:generateEvent(noteGen, velocityGen, smax, midiBuf)
 	end
 end
 
---Take a nunmber between 0 and 1 and map it exponentionally between low and high
-function expRange(x, low, high)
-	return (low-1) + math.pow(1+high-low, x)
-end
-
-function midiToFreq(midiNote)
-	return 440.0 * math.pow(2.0, (midiNote - 69)/12)
-end
-
-function freqToMidi(freq)
-	return math.floor(math.log(freq/440.0)/math.log(2) * 12 + 69)
-end
 
 
 function harmonicNoteGen(baseMidiNote)
