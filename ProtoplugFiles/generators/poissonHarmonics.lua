@@ -13,7 +13,6 @@ am = require "include/audioMath"
 --math = require "sci.math"
 
 
-
 -- Default base note : A 440hz at half velocity
 local baseNote = { note = 69, velocity = 69 }
 
@@ -21,44 +20,34 @@ local baseNote = { note = 69, velocity = 69 }
 --Poisson event based random time midi note generator
 local DustGenerator = {lambda = 1 / 0.3, sampleRate = 44100,
 					   channel = 1,
-					   blockTillEvents = 0
+					   blocksTillEvents = 0
+             gateLength = 0.001 --1ms - only send a short impulse
 					   }
 					
 -- Wait until the next block of events then creates new events to fill another block at least
 function DustGenerator:generateEvents(noteGen, velocityGen, smax, midiBuf)
 	function nextPoissonEventSample(lambda) 
 		local U = math.random()
-		return (-math.log(U) / lambda) * self.sampleRate
-		--return 0.03 * self.sampleRate
+		return math.floor((-math.log(U) / lambda) * self.sampleRate)
 	end
-	
-	self.blockCount = self.blockCount + 1
   
   --Events in this block, we need to generate the next set
-  if blockTillEvents == 0 then
+  if self.blocksTillEvents == 0 then
+    local offset    = am.MidiEventsQueue:lastTimeEventInCurrentBlock()
+    while offset < smax do
+      local nextEventTime = nextPoissonEventSample() + offset
+      local noteOffTime    = nextEventTime + math.floor(self.gateLength * self.sampleRate)
+      local eventOn = midi.Event.noteOn (self.channel, noteGen(), velocityGen())
+      local eventOff = midi.Event.noteOff(self.channel, eventOn:getNote(), 0)
+      am.MidiEventsQueue:registerEvent(eventOn, nextEventTime, smax)
+      am.MidiEventsQueue:registerEvent(eventOff, noteOffTime, smax)
+      offset = nextEventTime
+    end
+    
+    self.blockTillEvents = math.floor(offset / smax)
   end
-	
-	local blockNum     = math.floor(self.nextEventSample  / smax)
-	local sampleOffset = self.nextEventSample  - blockNum * smax
-	
-	if blockNum == self.blockCount then
-		::eventInBlock::
-		
-		--Only send a short pulse
-		local eventOn = midi.Event.noteOn (self.channel, noteGen(), velocityGen(), sampleOffset)
-		midiBuf:addEvent(eventOn)
-		local eventOff = midi.Event.noteOff(self.channel, eventOn:getNote(), 0, math.min(smax, sampleOffset+1))
-		midiBuf:addEvent(eventOff)
-		self.nextEventSample = nextPoissonEventSample(self.lambda) + sampleOffset
-		
-        blockNum     = math.floor(self.nextEventSample / smax)
-		if blockNum == 0 then
-            sampleOffset = self.nextEventSample - blockNum * smax
-		 	goto eventInBlock
-		end
-		
-		self.blockCount = 0
-	end
+    self.blockTillEvents = self.blockTillEvents - 1
+  
 end
 
 
@@ -98,7 +87,6 @@ end
 
 function plugin.processBlock(samples, smax, midiBuf)
 	DustGenerator.sampleRate = plugin.isSampleRateKnown() and plugin.getSampleRate() or 44100
-	--print(DustGenerator.sampleRate)
 	local inputNotes = {}
 	local i = 1
 	
@@ -116,11 +104,14 @@ function plugin.processBlock(samples, smax, midiBuf)
 		baseNote.note     = inputNotes[i-1]:getNote()
 		baseNote.velocity = inputNotes[i-1]:getVel()
 	end
+  
+	DustGenerator:generateEvent(harmonicNoteGen(baseNote.note), 
+					gaussianVelGen(baseNote.velocity, 30), smax, midiBuf)
 
 	-- fill midi buffer with prepared notes
 	midiBuf:clear()
-	DustGenerator:generateEvent(harmonicNoteGen(baseNote.note), 
-					gaussianVelGen(baseNote.velocity, 30), smax, midiBuf)
+  audioMath.MidiEventsQueue:playEvents(midiBuf)
+
 	
 end
 

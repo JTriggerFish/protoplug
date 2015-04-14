@@ -53,7 +53,11 @@ function audioMath.MidiEventsQueue:registerEvent(event, sampleOffsetToCurrentBlo
   local idx = (self.currentBlock + blockOffset) % self.maxBlock
   self.events[idx] = self.events[idx] or {}
   self.events[idx][event] = sampleOffset
-  #self.events[idx].lastEventTime = self.events[idx].lastEventTime sampleOffset
+  self.events[idx].lastEventTime = self.events[idx].lastEventTime or 0
+  if sampleOffset >= self.events[idx].lastEventTime then
+    self.events[idx].lastEventTime = sampleOffset
+    self.events[idx].lastEvent     = event
+  end
 end
 
 --This function has to be called in each processBlock !
@@ -72,10 +76,7 @@ end
 function audioMath.MidiEventsQueue:lastTimeEventInCurrentBlock()
   blockEvents = self.events[self.currentBlock]
   if blockEvents then
-    for event in pairs(blockEvents) do
-      midiBuf:addEvent(event)
-      --print(event)
-    end
+    return blockEvents.lastEventTime
   end
   return 0
 end
