@@ -20,15 +20,15 @@ local baseNote = { note = 69, velocity = 69 }
 --Poisson event based random time midi note generator
 local DustGenerator = {lambda = 1 / 0.3, sampleRate = 44100,
 					   channel = 1,
-					   blocksTillEvents = 0
+					   blocksTillEvents = 0,
              gateLength = 0.001 --1ms - only send a short impulse
 					   }
 					
 -- Wait until the next block of events then creates new events to fill another block at least
 function DustGenerator:generateEvents(noteGen, velocityGen, smax, midiBuf)
-	function nextPoissonEventSample(lambda) 
+	function nextPoissonEventSample()
 		local U = math.random()
-		return math.floor((-math.log(U) / lambda) * self.sampleRate)
+		return math.floor((-math.log(U) / self.lambda) * self.sampleRate)
 	end
   
   --Events in this block, we need to generate the next set
@@ -53,13 +53,13 @@ end
 
 
 function harmonicNoteGen(baseMidiNote)
-	local baseFreq = midiToFreq(baseMidiNote)
-	local maxFreq  = midiToFreq(127)
+	local baseFreq = am.midiToFreq(baseMidiNote)
+	local maxFreq  = am.midiToFreq(127)
 	local harmonicNotes = {}
 	for i = 1, 127 do
 		local freq = baseFreq * i
 		if freq > maxFreq then break end
-		harmonicNotes[i] = freqToMidi(freq)
+		harmonicNotes[i] = am.freqToMidi(freq)
 	end
 	local len = #harmonicNotes
   --[[for _,n in ipairs(harmonicNotes) do
@@ -105,7 +105,7 @@ function plugin.processBlock(samples, smax, midiBuf)
 		baseNote.velocity = inputNotes[i-1]:getVel()
 	end
   
-	DustGenerator:generateEvent(harmonicNoteGen(baseNote.note), 
+	DustGenerator:generateEvents(harmonicNoteGen(baseNote.note), 
 					gaussianVelGen(baseNote.velocity, 30), smax, midiBuf)
 
 	-- fill midi buffer with prepared notes

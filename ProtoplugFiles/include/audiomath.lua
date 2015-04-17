@@ -52,7 +52,8 @@ function audioMath.MidiEventsQueue:registerEvent(event, sampleOffsetToCurrentBlo
   event.time = sampleOffset
   local idx = (self.currentBlock + blockOffset) % self.maxBlock
   self.events[idx] = self.events[idx] or {}
-  self.events[idx][event] = sampleOffset
+  self.events[idx].list = self.events[idx].list or {}
+  table.insert(self.events[idx].list, event)
   self.events[idx].lastEventTime = self.events[idx].lastEventTime or 0
   if sampleOffset >= self.events[idx].lastEventTime then
     self.events[idx].lastEventTime = sampleOffset
@@ -64,7 +65,7 @@ end
 function audioMath.MidiEventsQueue:playEvents(midiBuf)
   blockEvents = self.events[self.currentBlock]
   if blockEvents then
-    for event in pairs(blockEvents) do
+    for i, event in ipairs(blockEvents.list) do
       midiBuf:addEvent(event)
       --print(event)
     end
