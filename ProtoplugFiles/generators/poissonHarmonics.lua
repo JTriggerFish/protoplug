@@ -21,7 +21,7 @@ local baseNote = { note = 69, velocity = 69 }
 local DustGenerator = {lambda = 1 / 0.3, sampleRate = 44100,
 					   channel = 1,
 					   blocksTillEvents = 0,
-             gateLength = 0.001 --1ms - only send a short impulse
+             		   gateLength = 0.005 --5ms - only send a short impulse
 					   }
 					
 -- Wait until the next block of events then creates new events to fill another block at least
@@ -44,9 +44,9 @@ function DustGenerator:generateEvents(noteGen, velocityGen, smax, midiBuf)
       offset = nextEventTime
     end
     
-    self.blockTillEvents = math.floor(offset / smax)
+    self.blocksTillEvents = math.floor(offset / smax)
   end
-    self.blockTillEvents = self.blockTillEvents - 1
+    self.blocksTillEvents = self.blocksTillEvents - 1
   
 end
 
@@ -62,15 +62,14 @@ function harmonicNoteGen(baseMidiNote)
 		harmonicNotes[i] = am.freqToMidi(freq)
 	end
 	local len = #harmonicNotes
-  --[[for _,n in ipairs(harmonicNotes) do
-    io.write(string.format("%d : %.3f\n", n, midiToFreq(n))) 
-  end]]--
-  local lambda = 0.3 --Make this lower to get more higher harmonics
+  	--[[for _,n in ipairs(harmonicNotes) do
+    	io.write(string.format("%d : %.3f\n", n, midiToFreq(n))) 
+  	end]]--
+  	local lambda = 0.3 --Make this lower to get more higher harmonics
 	return function()
 		local idx = math.min(1 + math.floor(-math.log(math.random()) / lambda), len)
 		return harmonicNotes[idx]
-  end
-  
+  	end
 end
 
 function gaussianVelGen(center, dev)
@@ -110,9 +109,8 @@ function plugin.processBlock(samples, smax, midiBuf)
 
 	-- fill midi buffer with prepared notes
 	midiBuf:clear()
-  audioMath.MidiEventsQueue:playEvents(midiBuf)
+    am.MidiEventsQueue:playEvents(midiBuf)
 
-	
 end
 
 
