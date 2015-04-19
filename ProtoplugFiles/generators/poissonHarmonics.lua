@@ -113,4 +113,12 @@ function plugin.processBlock(samples, smax, midiBuf)
 
 end
 
-
+params = plugin.manageParams {
+	{
+		name = "Density";
+		--type = "int";
+		max = 20.0;
+		min = 0.1;
+		changed = function(val) DustGenerator.lambda = val end;
+	};
+}
