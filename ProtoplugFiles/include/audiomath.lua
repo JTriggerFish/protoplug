@@ -8,6 +8,7 @@
 math.randomseed(os.time())
 math.random(); math.random(); math.random()
 
+
 math.boxMuller = function()
 	local U1 = math.random()
 	local U2 = math.random()
@@ -80,6 +81,61 @@ function audioMath.MidiEventsQueue:lastTimeEventInCurrentBlock()
     return blockEvents.lastEventTime
   end
   return 0
+end
+
+filters = require("include/filters")
+ffi     = require("ffi")
+
+
+function audioMath.X2Upsampler()
+  --A0 = filters.SecondOrderAllPassSection(0.1380)
+  --A1 = filters.SecondOrderAllPassSection(0.5847)
+  LPS = {}
+  nbLP = 3
+  for i=1, nbLP do
+    LPS[i] = filters.SecondOrderButterworthLP(0.25)
+  end
+  
+  return function(inSamples, blockSize)
+    --Note inSamples should be floats but
+    -- doubles are supposedly more efficient in LuaJIT so we output that instead
+    outSamples = ffi.new("double[?]", blockSize*2)
+
+    --[[Polyphase IIR interpolation filter as per http://www.ensilica.com/wp-content/uploads/High_performance_IIR_filters_for_interpolation_and_decimation.pdf--]]
+    for i=0, blockSize-1 do
+      --outSamples[2*i]   = A0(inSamples[i])
+      --outSamples[2*i+1] = A1(inSamples[i])
+      
+      --Dumb way for now
+      outSamples[2*i]   = inSamples[i]
+      outSamples[2*i+1] = 0
+    end
+    
+    --Dumb way for now
+    for i=0, 2*blockSize-1 do
+      for lp=1, nbLP do
+        outSamples[i] = LPS[lp](outSamples[i])
+      end
+    end
+
+    return outSamples
+  end
+end
+
+function audioMath.X2Downsampler()
+  -- TODO ! check values are correct and cutoff still in the right place !?
+  A0 = filters.SecondOrderAllPassSection(0.1380)
+  A1 = filters.SecondOrderAllPassSection(0.5847)
+  
+  return function(inSamples, outSamples, blockSize)
+
+    --[[Polyphase IIR interpolation filter as per   http://www.ensilica.com/wp-content/uploads/High_performance_IIR_filters_for_interpolation_and_decimation.pdf--]]
+    for i=0, blockSize-1 do
+      outSamples[i] = 0.5 * (A0(inSamples[2*i]) + A1(inSamples[2*i+1]))
+    end
+
+    return outSamples
+  end
 end
 
 return audioMath
