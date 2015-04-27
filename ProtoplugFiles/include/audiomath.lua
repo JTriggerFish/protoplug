@@ -64,7 +64,7 @@ end
 
 --This function has to be called in each processBlock !
 function audioMath.MidiEventsQueue:playEvents(midiBuf)
-  blockEvents = self.events[self.currentBlock]
+  local blockEvents = self.events[self.currentBlock]
   if blockEvents then
     for i, event in ipairs(blockEvents.list) do
       midiBuf:addEvent(event)
@@ -76,7 +76,7 @@ function audioMath.MidiEventsQueue:playEvents(midiBuf)
 end
 
 function audioMath.MidiEventsQueue:lastTimeEventInCurrentBlock()
-  blockEvents = self.events[self.currentBlock]
+ local blockEvents = self.events[self.currentBlock]
   if blockEvents then
     return blockEvents.lastEventTime
   end
@@ -88,19 +88,25 @@ ffi     = require("ffi")
 
 
 function audioMath.X2Upsampler()
-  --A0 = filters.SecondOrderAllPassSection(0.1380)
-  --A1 = filters.SecondOrderAllPassSection(0.5847)
-  LPS = {}
-  nbLP = 3
+  --local A0 = filters.SecondOrderAllPassSection(0.1380)
+  --local A1 = filters.SecondOrderAllPassSection(0.5847)
+  local LPS = {}
+  local nbLP = 3
   for i=1, nbLP do
     LPS[i] = filters.SecondOrderButterworthLP(0.25)
   end
   
+  --Note inSamples should be floats but
+  -- doubles are supposedly more efficient in LuaJIT so we output that instead
+  local bufferSize = 2048
+  local outSamples = ffi.new("double[?]", bufferSize)
+  
   return function(inSamples, blockSize)
-    --Note inSamples should be floats but
-    -- doubles are supposedly more efficient in LuaJIT so we output that instead
-    outSamples = ffi.new("double[?]", blockSize*2)
-
+    if bufferSize < blockSize * 2 then
+      bufferSize = blockSize * 2
+      outSamples = ffi.new("double[?]", bufferSize) 
+    end
+    
     --[[Polyphase IIR interpolation filter as per http://www.ensilica.com/wp-content/uploads/High_performance_IIR_filters_for_interpolation_and_decimation.pdf--]]
     for i=0, blockSize-1 do
       --outSamples[2*i]   = A0(inSamples[i])
@@ -124,8 +130,8 @@ end
 
 function audioMath.X2Downsampler()
   -- TODO ! check values are correct and cutoff still in the right place !?
-  A0 = filters.SecondOrderAllPassSection(0.1380)
-  A1 = filters.SecondOrderAllPassSection(0.5847)
+  local A0 = filters.SecondOrderAllPassSection(0.1380)
+  local A1 = filters.SecondOrderAllPassSection(0.5847)
   
   return function(inSamples, outSamples, blockSize)
 
