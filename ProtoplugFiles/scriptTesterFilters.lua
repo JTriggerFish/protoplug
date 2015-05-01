@@ -69,19 +69,43 @@ local function plotFFT(data, N, windowed)
 end
 
 local function upsample2XByBlocks(data, size)
-  local blockSize = 1024
-  local numBlocks = size / blockSize
-  if size % blockSize ~= 0 then
-    error("Size must be a multiple of blocksize", 1)
-  end
+  local blockSize = 64
+
   upSampler = am.X2Upsampler()
   
   outData = ffi.new("double[?]", size*2)
   
+  local numBlocks = size / blockSize
+  if size % blockSize ~= 0 then
+    error("Size must be a multiple of blocksize", 1)
+  end
+  
   for b=0, numBlocks -1 do
-    outSamples = upSampler(data+b, blockSize)
-    for s=0, blockSize-1 do
-      outData[b*blockSize + s] = outSamples[s]
+    outSamples = upSampler(data+b*blockSize, blockSize)
+    for s=0, 2*blockSize-1 do
+      outData[b*2*blockSize + s] = outSamples[s]
+    end
+  end
+  
+  return outData
+end
+
+local function downsample2XByBlocks(data, size)
+  local blockSize = 64
+
+  downsampler = am.X2Downsampler()
+  
+  outData = ffi.new("float[?]", size/2)
+  
+  local numBlocks = size / blockSize
+  if size % blockSize ~= 0 then
+    error("Size must be a multiple of blocksize", 1)
+  end
+  
+  for b=0, numBlocks -1 do
+    outSamples = downsampler(data+b*blockSize, blockSize)
+    for s=0, blockSize/2-1 do
+      outData[b*blockSize/2 + s] = outSamples[s]
     end
   end
   
@@ -89,7 +113,7 @@ local function upsample2XByBlocks(data, size)
 end
 
 
-do
+function X2UpsamplerTest()
   local fftSize   = 4096
 
   local testFrequencies = {0.25}
@@ -117,7 +141,31 @@ do
   plotFFT(data, fftSize, nil)
   --]]
   
-  upSampledData = upsample2XByBlocks(data, fftSize)
+  local upSampledData = upsample2XByBlocks(data, fftSize)
   plotFFT(upSampledData, fftSize*2)
   
 end
+function X2DownsamplerTest()
+  local fftSize   = 4096*2
+
+  local testFrequencies = {0.26}
+  local testAmplitude = 1 / #testFrequencies
+  --testFrequencies = {0.05, 0.1, 0.15, 0.2, 0.3, 0.4, 0.48}
+  
+  local data = ffi.new("double[?]", fftSize)
+  
+  
+  for _,f in ipairs(testFrequencies) do
+    for i=0, fftSize-1 do
+      data[i] = data[i] + testAmplitude * math.cos(2*math.pi*f *i)
+      --print(data[i])
+    end
+  end
+  
+  
+  local downsampledData = downsample2XByBlocks(data, fftSize)
+  plotFFT(downsampledData, fftSize/2)
+  
+end
+
+X2UpsamplerTest()

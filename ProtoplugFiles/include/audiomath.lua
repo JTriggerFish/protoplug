@@ -88,13 +88,16 @@ ffi     = require("ffi")
 
 
 function audioMath.X2Upsampler()
-  --local A0 = filters.SecondOrderAllPassSection(0.1380)
-  --local A1 = filters.SecondOrderAllPassSection(0.5847)
-  local LPS = {}
-  local nbLP = 3
-  for i=1, nbLP do
-    LPS[i] = filters.SecondOrderButterworthLP(0.25)
-  end
+  --[[Polyphase IIR decomposition of 5th order buttworth with normalised cutoff at 0.25 ( half Nyquist)
+  used for interpolation: --]]
+  --We apply the filter twice in series
+  local A0_1 = filters.FirstOrderAllPassTDF2(2/(10 + 4*math.sqrt(5)))
+  local A0_2 = filters.FirstOrderAllPassTDF2(2/(10 + 4*math.sqrt(5)))
+  local A0_3 = filters.FirstOrderAllPassTDF2(2/(10 + 4*math.sqrt(5)))
+  local A1_1 = filters.FirstOrderAllPassTDF2((10 - 4*math.sqrt(5))/2)
+  local A1_2 = filters.FirstOrderAllPassTDF2((10 - 4*math.sqrt(5))/2)
+  local A1_3 = filters.FirstOrderAllPassTDF2((10 - 4*math.sqrt(5))/2)
+  local z_1  = filters.OneSampleDelay()
   
   --Note inSamples should be floats but
   -- doubles are supposedly more efficient in LuaJIT so we output that instead
@@ -107,21 +110,11 @@ function audioMath.X2Upsampler()
       outSamples = ffi.new("double[?]", bufferSize) 
     end
     
-    --[[Polyphase IIR interpolation filter as per http://www.ensilica.com/wp-content/uploads/High_performance_IIR_filters_for_interpolation_and_decimation.pdf--]]
+    -- Apply the butterworth filter's decomposition twice in series.
     for i=0, blockSize-1 do
-      --outSamples[2*i]   = A0(inSamples[i])
-      --outSamples[2*i+1] = A1(inSamples[i])
-      
-      --Dumb way for now
-      outSamples[2*i]   = inSamples[i]
-      outSamples[2*i+1] = 0
-    end
-    
-    --Dumb way for now
-    for i=0, 2*blockSize-1 do
-      for lp=1, nbLP do
-        outSamples[i] = LPS[lp](outSamples[i])
-      end
+      local d1          = z_1(inSamples[i])
+      outSamples[2*i]   = 0.25 * ( A0_2( A0_1(inSamples[i]))  + A1_2( A1_1(d1) ))
+      outSamples[2*i+1] = 0.5 * A0_3 (A1_3(inSamples[i]))
     end
 
     return outSamples
@@ -130,14 +123,22 @@ end
 
 function audioMath.X2Downsampler()
   -- TODO ! check values are correct and cutoff still in the right place !?
-  local A0 = filters.SecondOrderAllPassSection(0.1380)
-  local A1 = filters.SecondOrderAllPassSection(0.5847)
+  local bufferSize = 1024
+  local outSamples = ffi.new("float[?]", bufferSize)
   
-  return function(inSamples, outSamples, blockSize)
-
+  local A0 = filters.FirstOrderAllPassTDF2(2/(10 + 4*math.sqrt(5)))
+  local A1 = filters.FirstOrderAllPassTDF2(2/(10 + 4*math.sqrt(5)))
+  
+  return function(inSamples, blockSize)
+    if bufferSize < blockSize / 2 then
+      bufferSize = blockSize / 2
+      outSamples = ffi.new("float[?]", bufferSize) 
+    end
+    
     --[[Polyphase IIR interpolation filter as per   http://www.ensilica.com/wp-content/uploads/High_performance_IIR_filters_for_interpolation_and_decimation.pdf--]]
-    for i=0, blockSize-1 do
+    for i=0, blockSize/2-1 do
       outSamples[i] = 0.5 * (A0(inSamples[2*i]) + A1(inSamples[2*i+1]))
+      --outSamples[i] = inSamples[2*i];
     end
 
     return outSamples

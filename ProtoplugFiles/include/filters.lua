@@ -2,17 +2,28 @@ local ffi = require("ffi")
 local filter = {}
 
 ffi.cdef[[
-typedef struct _SecondOrderAllPassSection
+typedef struct _FirstOrderAllPass
 {
-  double coeff;
-  double x_z[2]; //Input delay elements z^-1 and z^-2
-  double y_z[2]; //Output delay elements z^-1 and z^-2
-}SecondOrderAllPassSection;
+  // H(z) = Y/X(z) = (a + z^-1 ) / (1 + a*z^-1)
+  double a;
+  double s1;
+}FirstOrderAllPass;
+typedef struct _SecondOrderAllPass
+{
+  // H(z) = Y/X(z) = (a + z^-2 ) / (1 + a*z^-2)
+  double a;
+  double s1;
+  double s2;
+}SecondOrderAllPass;
+typedef struct _OneSampleDelay
+{
+  double s;
+}OneSampleDelay;
 ]]
 ffi.cdef[[
 typedef struct _SecondOrderIIR
 {
-  //a0 * y[n] = b0 * x[n] + b1 * x[n-1] + b2 * x[n-2] - a1* y[n-1] - a2 * y[n-2]
+  // H(z) = Y/X(z) = ( b0 + b1 * z^-1 + b2 * x z^-2 ) / ( a0 + a1 * z^-1 + a2 * x z^-2 )
   double a[3];
   double b[3];
   double s1;
@@ -22,15 +33,35 @@ typedef struct _SecondOrderIIR
 
 filter.static = {}
 
-function filter.SecondOrderAllPassSection(coeff)
-  local data = ffi.new("SecondOrderAllPassSection") -- note it wil be zero filled by ffi.new
-  data.coeff = coeff
+function filter.OneSampleDelay()
+  local data = ffi.new("OneSampleDelay")  -- note the scruct will be zero filled by ffi.new
   return function(x)
-      local y = data.x_z[1] + data.coeff * ( x - data.y_z[1] )
-      data.x_z[1] = data.x_z[0]
-      data.y_z[1] = data.y_z[0]
-      data.x_z[0] = x
-      data.y_z[0] = y
+    local y = data.s
+    data.s  = x
+    return y
+  end
+end
+
+
+function filter.FirstOrderAllPassTDF2(coeff)
+  local data = ffi.new("FirstOrderAllPass") -- note the scruct will be zero filled by ffi.new
+  data.a = coeff
+  return function(x)
+      local s = x - data.a * data.s1
+      local y = data.a * s + data.s1
+      data.s1 = s
+      return y
+    end
+end
+
+function filter.SecondOrderAllPassTDF2(coeff)
+  local data = ffi.new("SecondOrderAllPass") -- note the scruct will be zero filled by ffi.new
+  data.a = coeff
+  return function(x)
+      local s = x - data.a * data.s2 
+      local y = data.a * s + data.s2
+      data.s2 = data.s1
+      data.s1 = s
       return y
     end
 end
@@ -54,7 +85,7 @@ function filter.BiquadTDF2(a, b)
 end
 
 function filter.SecondOrderButterworthLP(fc)
-  --Note fc is a normalised frequency between 0 and 0.5 !
+  --Note fc is a normalised frequency between 0 and 0.5, 0.5 being the Nyquist limit
   local c = 1 / math.tan(math.pi * fc)
   local b = { 1, 2, 1 }
   local a = { 1 + math.sqrt(2)*c + c^2, 2 - 2*c^2, 1 - math.sqrt(2)*c + c^2}
