@@ -127,7 +127,7 @@ function audioMath.X2Downsampler()
   local outSamples = ffi.new("float[?]", bufferSize)
   
   local A0 = filters.FirstOrderAllPassTDF2(2/(10 + 4*math.sqrt(5)))
-  local A1 = filters.FirstOrderAllPassTDF2(2/(10 + 4*math.sqrt(5)))
+  local A1 = filters.FirstOrderAllPassTDF2(2/(10 - 4*math.sqrt(5)))
   
   return function(inSamples, blockSize)
     if bufferSize < blockSize / 2 then
