@@ -101,14 +101,19 @@ local function plotFFT_Torch(data, N, windowed)
     --freq[#freq+1]  = -0.5 + i / (N-1)
     freq[#freq+1]  = 2*i / N
     amplitude[#freq] = 20 * math.log10(math.sqrt(ret[i+1][1]^2+ret[i+1][2]^2)/N)
+    phase[#freq]     = math.atan(ret[i+1][2]/ret[i+1][1])
   end
   
   require 'gnuplot'
   gnuplot.figure(1)
 
-  gnuplot.plot('amplitude',torch.Tensor(freq), torch.Tensor(amplitude),'-')
+  --gnuplot.plot('amplitude',torch.Tensor(freq), torch.Tensor(amplitude),'-')
+  --Phase unwrap is broken !
+  phase = signal.unwrap(torch.Tensor(phase))
+  gnuplot.plot('phase',torch.Tensor(freq), phase,'-')
   gnuplot.xlabel('freq')
-  gnuplot.ylabel('20 log |H|')
+  --gnuplot.ylabel('20 log |H|')
+  gnuplot.ylabel('phase')
   local wait = io.read()
   
 end
@@ -193,7 +198,7 @@ end
 function X2DownsamplerTest()
   local fftSize   = 4096*2
 
-  local testFrequencies = {0.9}
+  local testFrequencies = {0.3}
   local testAmplitude = 1 / #testFrequencies
   --testFrequencies = {0.05, 0.1, 0.15, 0.2, 0.3, 0.4, 0.48}
   
@@ -209,7 +214,12 @@ function X2DownsamplerTest()
   
   
   local downsampledData = downsample2XByBlocks(data, fftSize)
-  plotFFT_Torch(downsampledData, fftSize/2,1)
+  --plotFFT_Torch(downsampledData, fftSize/2,1)
+  local test1 = filters.SecondOrderButterworthLP(0.5)
+  for i=0, fftSize-1 do
+    data[i] = test1(data[i])
+  end
+  plotFFT_Torch(data, fftSize,1)
   
 end
 

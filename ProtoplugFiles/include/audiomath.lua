@@ -123,12 +123,17 @@ function audioMath.X2Upsampler()
 end
 
 function audioMath.X2Downsampler()
-  -- TODO ! check values are correct and cutoff still in the right place !?
+  --[[Polyphase IIR decomposition of 5th order buttworth with normalised cutoff at 0.5 ( half Nyquist)
+  used for interpolation: --]]
   local bufferSize = 1024
   local outSamples = ffi.new("float[?]", bufferSize)
   
   local A0 = filters.FirstOrderAllPassTDF2(2/(10 + 4*math.sqrt(5)))
   local A1 = filters.FirstOrderAllPassTDF2((10 - 4*math.sqrt(5))/2)
+  local z_1  = filters.OneSampleDelay()
+  
+  --local test = filters.SecondOrderButterworthLP(0.5)
+
   
   return function(inSamples, blockSize)
     if bufferSize < blockSize / 2 then
@@ -136,10 +141,16 @@ function audioMath.X2Downsampler()
       outSamples = ffi.new("float[?]", bufferSize) 
     end
     
-    --[[Polyphase IIR interpolation filter as per   http://www.ensilica.com/wp-content/uploads/High_performance_IIR_filters_for_interpolation_and_decimation.pdf--]]
+    
+    local s1, s2
     for i=0, blockSize/2-1 do
-      outSamples[i] = 0.5 * (A0(inSamples[2*i]) + A1(inSamples[2*i+1]))
-      --outSamples[i] = inSamples[2*i];
+      s1 = z_1(inSamples[2*i])
+      s2 = z_1(inSamples[2*i+1])
+      outSamples[i] = 0.5 * (A0(inSamples[2*i]) + A1(s1))
+      --s1 = test(inSamples[2*i])
+      --s2 = test(inSamples[2*i+1])
+      --outSamples[i] = s1
+      --outSamples[i] = inSamples[2*i]
     end
 
     return outSamples
