@@ -5,6 +5,7 @@
     ------------------------------------------------------------------------------------
 --]]
 -- Initialise the random number generator
+--require('mobdebug').start()
 math.randomseed(os.time())
 math.random(); math.random(); math.random()
 
@@ -88,7 +89,7 @@ ffi     = require("ffi")
 
 
 function audioMath.X2Upsampler()
-  --[[Polyphase IIR decomposition of 5th order buttworth with normalised cutoff at 0.25 ( half Nyquist)
+  --[[Polyphase IIR decomposition of 5th order buttworth with normalised cutoff at 0.5 ( half Nyquist)
   used for interpolation: --]]
   --We apply the filter twice in series
   local A0_1 = filters.FirstOrderAllPassTDF2(2/(10 + 4*math.sqrt(5)))
@@ -127,7 +128,7 @@ function audioMath.X2Downsampler()
   local outSamples = ffi.new("float[?]", bufferSize)
   
   local A0 = filters.FirstOrderAllPassTDF2(2/(10 + 4*math.sqrt(5)))
-  local A1 = filters.FirstOrderAllPassTDF2(2/(10 - 4*math.sqrt(5)))
+  local A1 = filters.FirstOrderAllPassTDF2((10 - 4*math.sqrt(5))/2)
   
   return function(inSamples, blockSize)
     if bufferSize < blockSize / 2 then

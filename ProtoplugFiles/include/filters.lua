@@ -85,8 +85,8 @@ function filter.BiquadTDF2(a, b)
 end
 
 function filter.SecondOrderButterworthLP(fc)
-  --Note fc is a normalised frequency between 0 and 0.5, 0.5 being the Nyquist limit
-  local c = 1 / math.tan(math.pi * fc)
+  --Note fc is a normalised frequency between 0 and 1, 1 being the Nyquist limit
+  local c = 1 / math.tan(math.pi * fc/2)
   local b = { 1, 2, 1 }
   local a = { 1 + math.sqrt(2)*c + c^2, 2 - 2*c^2, 1 - math.sqrt(2)*c + c^2}
   

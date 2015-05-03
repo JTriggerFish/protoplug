@@ -1,14 +1,21 @@
+--require('mobdebug').start()
+--protoplug_path = "C:\\Lua\\protoplug\\Bin\\win32\\Lua Protoplug Gen.dll"
+--protoplug_path= "/Users/JT/JUCE/protoplug/Bin/mac/Release/Lua Protoplug Gen.vst/Contents/MacOS/Lua Protoplug Gen"
+--protoplug_dir  = "."
+package.path = package.path..';/Users/JT/JUCE/protoplug/ProtoplugFiles'
 
-protoplug_path = "C:\\Lua\\protoplug\\Bin\\win32\\Lua Protoplug Gen.dll"
-protoplug_dir  = "."
-require "include/protoplug"
+
+--require "include/protoplug"
 am = require "include/audioMath"
 filters = require "include/filters"
 local ffi = require "ffi"
 
-require "include/luafft" --https://github.com/vection/luafft
-local gp = require('gnuplot')
+--require "include/luafft" --https://github.com/vection/luafft
+--local gp = require('gnuplot')
 
+local signal = require 'signal'
+
+--[[
 local function toComplex(data, size)
     local list = {}
     for i=0, size-1 do
@@ -16,6 +23,7 @@ local function toComplex(data, size)
     end
     return list
 end
+
 
 local function plot(x, y, xLabel, yLabel, Title)
 
@@ -36,6 +44,7 @@ local function plot(x, y, xLabel, yLabel, Title)
   }:plot('graph.png')
     
 end
+--]]
 
 --Apply window to data, expected to be an array of doubles or floats starting at zero
 local function applyHannWindow(data, N)
@@ -46,6 +55,7 @@ local function applyHannWindow(data, N)
     --data[i] = 1 - ((i - (N-1)/2)/((N-1)/2))^2
   end
 end
+
 
 local function plotFFT(data, N, windowed)
   if windowed then
@@ -60,12 +70,47 @@ local function plotFFT(data, N, windowed)
   
   for i=0, N/2 do
     --freq[#freq+1]  = -0.5 + i / (N-1)
-    freq[#freq+1]  = i / N
+    freq[#freq+1]  = 2*i / N
     amplitude[#freq+1] = 20 * math.log10(complex.abs(ret[i+1]) / N)
   end
   
   plot(freq, amplitude, "freq", "20log|H|", "amplitude")
 
+end
+
+local function plotFFT_Torch(data, N, windowed)
+  if windowed then
+    applyHannWindow(data, N)
+  end
+  
+  local function toComplex(data, size)
+    local list = {}
+    for i=0, size-1 do
+      list[i+1] = {data[i], 0}
+    end
+    return torch.Tensor(list)
+  end
+  
+  local ret = signal.fft(toComplex(data, N))
+  
+  local freq      = {}
+  local amplitude = {}
+  local phase     = {}
+  
+  for i=0, N/2 do
+    --freq[#freq+1]  = -0.5 + i / (N-1)
+    freq[#freq+1]  = 2*i / N
+    amplitude[#freq] = 20 * math.log10(math.sqrt(ret[i+1][1]^2+ret[i+1][2]^2)/N)
+  end
+  
+  require 'gnuplot'
+  gnuplot.figure(1)
+
+  gnuplot.plot('amplitude',torch.Tensor(freq), torch.Tensor(amplitude),'-')
+  gnuplot.xlabel('freq')
+  gnuplot.ylabel('20 log |H|')
+  local wait = io.read()
+  
 end
 
 local function upsample2XByBlocks(data, size)
@@ -116,7 +161,7 @@ end
 function X2UpsamplerTest()
   local fftSize   = 4096
 
-  local testFrequencies = {0.25}
+  local testFrequencies = {0.5}
   local testAmplitude = 1 / #testFrequencies
   --testFrequencies = {0.05, 0.1, 0.15, 0.2, 0.3, 0.4, 0.48}
   
@@ -125,7 +170,7 @@ function X2UpsamplerTest()
   
   for _,f in ipairs(testFrequencies) do
     for i=0, fftSize-1 do
-      data[i] = data[i] + testAmplitude * math.cos(2*math.pi*f *i)
+      data[i] = data[i] + testAmplitude * math.cos(2*math.pi*f *i/2)
       --print(data[i])
     end
   end
@@ -142,13 +187,13 @@ function X2UpsamplerTest()
   --]]
   
   local upSampledData = upsample2XByBlocks(data, fftSize)
-  plotFFT(upSampledData, fftSize*2)
+  plotFFT_Torch(upSampledData, fftSize*2)
   
 end
 function X2DownsamplerTest()
   local fftSize   = 4096*2
 
-  local testFrequencies = {0.26}
+  local testFrequencies = {0.9}
   local testAmplitude = 1 / #testFrequencies
   --testFrequencies = {0.05, 0.1, 0.15, 0.2, 0.3, 0.4, 0.48}
   
@@ -157,15 +202,15 @@ function X2DownsamplerTest()
   
   for _,f in ipairs(testFrequencies) do
     for i=0, fftSize-1 do
-      data[i] = data[i] + testAmplitude * math.cos(2*math.pi*f *i)
+      data[i] = data[i] + testAmplitude * math.cos(2*math.pi*f *i/2)
       --print(data[i])
     end
   end
   
   
   local downsampledData = downsample2XByBlocks(data, fftSize)
-  plotFFT(downsampledData, fftSize/2)
+  plotFFT_Torch(downsampledData, fftSize/2,1)
   
 end
 
-X2UpsamplerTest()
+X2DownsamplerTest()
