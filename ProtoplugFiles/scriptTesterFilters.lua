@@ -56,6 +56,24 @@ local function applyHannWindow(data, N)
   end
 end
 
+local function phaseUnwrap(list,in_tol)
+  local tol = in_tol or math.pi - 0.1
+  local prev = list[1]
+  for i=2, #list do
+    local jump = math.abs(list[i] - prev)
+    if  jump > tol then
+        local o1 = list[i] + math.pi - prev
+        local o2 = list[i] - math.pi - prev
+        if math.abs(o1) < jump and math.abs(o1) < math.abs(o2) then
+          list[i] = list[i] + math.pi
+        elseif math.abs(o2) < jump then
+          list[i] = list[i] - math.pi
+        end
+    end
+    prev = list[i]
+  end
+end
+
 
 local function plotFFT(data, N, windowed)
   if windowed then
@@ -109,7 +127,8 @@ local function plotFFT_Torch(data, N, windowed)
 
   --gnuplot.plot('amplitude',torch.Tensor(freq), torch.Tensor(amplitude),'-')
   --Phase unwrap is broken !
-  phase = signal.unwrap(torch.Tensor(phase))
+  phaseUnwrap(phase)
+  phase = torch.Tensor(phase)
   gnuplot.plot('phase',torch.Tensor(freq), phase,'-')
   gnuplot.xlabel('freq')
   --gnuplot.ylabel('20 log |H|')
@@ -214,12 +233,13 @@ function X2DownsamplerTest()
   
   
   local downsampledData = downsample2XByBlocks(data, fftSize)
-  --plotFFT_Torch(downsampledData, fftSize/2,1)
-  local test1 = filters.SecondOrderButterworthLP(0.5)
+  plotFFT_Torch(downsampledData, fftSize/2,1)
+  --[[local test1 = filters.SecondOrderButterworthLP(0.5)
+  
   for i=0, fftSize-1 do
     data[i] = test1(data[i])
   end
-  plotFFT_Torch(data, fftSize,1)
+  plotFFT_Torch(data, fftSize,1) --]]
   
 end
 
