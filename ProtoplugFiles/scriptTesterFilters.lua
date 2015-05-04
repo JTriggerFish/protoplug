@@ -96,6 +96,29 @@ local function plotFFT(data, N, windowed)
 
 end
 
+local function plotSignal_Torch(data, N, from, to)
+  from = from or 0
+  to   = to   or N-1
+  local t = {}
+  local vals = {}
+  j=0
+  for i=from, to do
+    t[j+1]    = i
+    vals[j+1] = data[i]
+    j = j + 1
+  end
+    
+  require 'gnuplot'
+  gnuplot.figure(1)
+
+  gnuplot.plot('signal',torch.Tensor(t), torch.Tensor(vals),'-')
+  gnuplot.xlabel('t')
+  --gnuplot.ylabel('20 log |H|')
+  gnuplot.ylabel('amplitude')
+  local wait = io.read()
+end
+
+
 local function plotFFT_Torch(data, N, windowed)
   if windowed then
     applyHannWindow(data, N)
@@ -211,13 +234,13 @@ function X2UpsamplerTest()
   --]]
   
   local upSampledData = upsample2XByBlocks(data, fftSize)
-  plotFFT_Torch(upSampledData, fftSize*2)
+  plotFFT_Torch(upSampledData, fftSize)
   
 end
 function X2DownsamplerTest()
   local fftSize   = 4096*2
 
-  local testFrequencies = {0.3}
+  local testFrequencies = {0.5}
   local testAmplitude = 1 / #testFrequencies
   --testFrequencies = {0.05, 0.1, 0.15, 0.2, 0.3, 0.4, 0.48}
   
@@ -233,7 +256,9 @@ function X2DownsamplerTest()
   
   
   local downsampledData = downsample2XByBlocks(data, fftSize)
-  plotFFT_Torch(downsampledData, fftSize/2,1)
+  plotFFT_Torch(data, fftSize)
+  --plotSignal_Torch(downsampledData, fftSize/2,fftSize/4,fftSize/2-1)
+  --plotSignal_Torch(data, fftSize, fftSize/2, fftSize-1)
   --[[local test1 = filters.SecondOrderButterworthLP(0.5)
   
   for i=0, fftSize-1 do
@@ -243,4 +268,4 @@ function X2DownsamplerTest()
   
 end
 
-X2DownsamplerTest()
+X2UpsamplerTest()
