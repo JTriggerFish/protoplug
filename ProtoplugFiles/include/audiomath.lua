@@ -112,10 +112,62 @@ function audioMath.X2Upsampler()
     end
     
     -- Apply the butterworth filter's decomposition twice in series.
+    local d1
     for i=0, blockSize-1 do
-      local d1          = z_1(inSamples[i])
+      d1                = z_1(inSamples[i])
       outSamples[2*i]   = 0.25 * ( A0_2( A0_1(inSamples[i]))  + A1_2( A1_1(d1) ))
       outSamples[2*i+1] = 0.5 * A0_3 (A1_3(inSamples[i]))
+    end
+
+    return outSamples
+  end
+end
+
+function audioMath.X4Upsampler()
+  --This is essentially a 2X upsampling applied twice and unrolled for efficency
+  --[[Polyphase IIR decomposition of 5th order buttworth with normalised cutoff at 0.5 ( half Nyquist)
+  used for interpolation: --]]
+  --We apply the filter twice in series
+  local First_A0_1 = filters.FirstOrderAllPassTDF2(2/(10 + 4*math.sqrt(5)))
+  local First_A0_2 = filters.FirstOrderAllPassTDF2(2/(10 + 4*math.sqrt(5)))
+  local First_A0_3 = filters.FirstOrderAllPassTDF2(2/(10 + 4*math.sqrt(5)))
+  local First_A1_1 = filters.FirstOrderAllPassTDF2((10 - 4*math.sqrt(5))/2)
+  local First_A1_2 = filters.FirstOrderAllPassTDF2((10 - 4*math.sqrt(5))/2)
+  local First_A1_3 = filters.FirstOrderAllPassTDF2((10 - 4*math.sqrt(5))/2)
+  local First_z_1  = filters.OneSampleDelay()
+  
+  --Same thing for second stage
+  local Second_A0_1 = filters.FirstOrderAllPassTDF2(2/(10 + 4*math.sqrt(5)))
+  local Second_A0_2 = filters.FirstOrderAllPassTDF2(2/(10 + 4*math.sqrt(5)))
+  local Second_A0_3 = filters.FirstOrderAllPassTDF2(2/(10 + 4*math.sqrt(5)))
+  local Second_A1_1 = filters.FirstOrderAllPassTDF2((10 - 4*math.sqrt(5))/2)
+  local Second_A1_2 = filters.FirstOrderAllPassTDF2((10 - 4*math.sqrt(5))/2)
+  local Second_A1_3 = filters.FirstOrderAllPassTDF2((10 - 4*math.sqrt(5))/2)
+  local Second_z_1  = filters.OneSampleDelay()
+  
+  
+  --Note inSamples should be floats but
+  -- doubles are supposedly more efficient in LuaJIT so we output that instead
+  local bufferSize = 4096
+  local outSamples = ffi.new("double[?]", bufferSize)
+  
+  return function(inSamples, blockSize)
+    if bufferSize < blockSize * 4 then
+      bufferSize = blockSize * 4
+      outSamples = ffi.new("double[?]", bufferSize) 
+    end
+    
+    local s1, s2, d1, d2, d3
+    for i=0, blockSize-1 do
+      d1                  = First_z_1(inSamples[i])
+      s1                  = 0.25 * ( First_A0_2( First_A0_1(inSamples[i]))  + First_A1_2( First_A1_1(d1) ))
+      s2                  = 0.5 * First_A0_3 (First_A1_3(inSamples[i]))
+      d2                  = Second_z_1(s1)
+      d3                  = Second_z_1(s2)
+      outSamples[4*i + 0] = 0.25 * ( Second_A0_2( Second_A0_1(s1))  + Second_A1_2( Second_A1_1(d2) ))
+      outSamples[4*i + 1] = 0.5 * Second_A0_3 (Second_A1_3(s1))
+      outSamples[4*i + 2] = 0.25 * ( Second_A0_2( Second_A0_1(s2))  + Second_A1_2( Second_A1_1(d3) ))
+      outSamples[4*i + 3] = 0.5 * Second_A0_3 (Second_A1_3(s2))
     end
 
     return outSamples
@@ -128,9 +180,18 @@ function audioMath.X2Downsampler()
   local bufferSize = 1024
   local outSamples = ffi.new("float[?]", bufferSize)
   
+  --[[
   local A0 = filters.FirstOrderAllPassTDF2(2/(10 + 4*math.sqrt(5)))
   local A1 = filters.FirstOrderAllPassTDF2((10 - 4*math.sqrt(5))/2)
-  local z_1  = filters.OneSampleDelay()
+  local z_1  = filters.OneSampleDelay() --]]
+  local A0_1 = filters.FirstOrderAllPassTDF2(2/(10 + 4*math.sqrt(5)))
+  local A0_2 = filters.FirstOrderAllPassTDF2(2/(10 + 4*math.sqrt(5)))
+  local A0_3 = filters.FirstOrderAllPassTDF2(2/(10 + 4*math.sqrt(5)))
+  local A1_1 = filters.FirstOrderAllPassTDF2((10 - 4*math.sqrt(5))/2)
+  local A1_2 = filters.FirstOrderAllPassTDF2((10 - 4*math.sqrt(5))/2)
+  local A1_3 = filters.FirstOrderAllPassTDF2((10 - 4*math.sqrt(5))/2)
+  local z_1_1  = filters.OneSampleDelay()
+  local z_1_2  = filters.OneSampleDelay()
   
   --local test = filters.SecondOrderButterworthLP(0.5)
 
@@ -142,15 +203,20 @@ function audioMath.X2Downsampler()
     end
     
     
-    local s1, s2
+    local s1, s2, s3, s4
     for i=0, blockSize/2-1 do
+      --[[Single filter application ( 5th orde ) version
       s1 = z_1(inSamples[2*i])
       s2 = z_1(inSamples[2*i+1])
-      outSamples[i] = 0.5 * (A0(inSamples[2*i]) + A1(s1))
-      --s1 = test(inSamples[2*i])
-      --s2 = test(inSamples[2*i+1])
-      --outSamples[i] = s1
-      --outSamples[i] = inSamples[2*i]
+      outSamples[i] = 0.5 * (A0_1(inSamples[2*i]) + A1_1(s1)) --]]
+      --Double application of the decomposed IIR filter :
+      --
+      s1 = z_1_1(inSamples[2*i])
+      s2 = z_1_1(inSamples[2*i+1])
+      s3 = z_1_2(s1)
+      s4 = z_1_2(s2)
+      outSamples[i] = 0.25 * ( A0_2( A0_1(inSamples[2*i]))  + A1_2( A1_1(s3) )) + 0.5 * A0_3 (A1_3(s1)) 
+    --]]
     end
 
     return outSamples

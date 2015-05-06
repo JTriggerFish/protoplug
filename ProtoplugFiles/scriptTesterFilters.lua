@@ -2,7 +2,7 @@
 --protoplug_path = "C:\\Lua\\protoplug\\Bin\\win32\\Lua Protoplug Gen.dll"
 --protoplug_path= "/Users/JT/JUCE/protoplug/Bin/mac/Release/Lua Protoplug Gen.vst/Contents/MacOS/Lua Protoplug Gen"
 --protoplug_dir  = "."
-package.path = package.path..';/Users/JT/JUCE/protoplug/ProtoplugFiles'
+--package.path = package.path..';/Users/JT/JUCE/protoplug/ProtoplugFiles'
 
 
 --require "include/protoplug"
@@ -10,12 +10,12 @@ am = require "include/audioMath"
 filters = require "include/filters"
 local ffi = require "ffi"
 
---require "include/luafft" --https://github.com/vection/luafft
---local gp = require('gnuplot')
+require "include/luafft" --https://github.com/vection/luafft
+local gp = require('gnuplot')
 
-local signal = require 'signal'
+--local signal = require 'signal'
 
---[[
+
 local function toComplex(data, size)
     local list = {}
     for i=0, size-1 do
@@ -44,7 +44,7 @@ local function plot(x, y, xLabel, yLabel, Title)
   }:plot('graph.png')
     
 end
---]]
+
 
 --Apply window to data, expected to be an array of doubles or floats starting at zero
 local function applyHannWindow(data, N)
@@ -93,7 +93,7 @@ local function plotFFT(data, N, windowed)
   end
   
   plot(freq, amplitude, "freq", "20log|H|", "amplitude")
-
+  --local wait = io.read()
 end
 
 local function plotSignal_Torch(data, N, from, to)
@@ -182,6 +182,28 @@ local function upsample2XByBlocks(data, size)
   return outData
 end
 
+local function upsample4XByBlocks(data, size)
+  local blockSize = 64
+
+  upSampler = am.X4Upsampler()
+  
+  outData = ffi.new("double[?]", size*4)
+  
+  local numBlocks = size / blockSize
+  if size % blockSize ~= 0 then
+    error("Size must be a multiple of blocksize", 1)
+  end
+  
+  for b=0, numBlocks -1 do
+    outSamples = upSampler(data+b*blockSize, blockSize)
+    for s=0, 4*blockSize-1 do
+      outData[b*4*blockSize + s] = outSamples[s]
+    end
+  end
+  
+  return outData
+end
+
 local function downsample2XByBlocks(data, size)
   local blockSize = 64
 
@@ -237,10 +259,42 @@ function X2UpsamplerTest()
   plotFFT_Torch(upSampledData, fftSize)
   
 end
+function X4UpsamplerTest()
+  local fftSize   = 4096
+
+  local testFrequencies = {0.5}
+  local testAmplitude = 1 / #testFrequencies
+  --testFrequencies = {0.05, 0.1, 0.15, 0.2, 0.3, 0.4, 0.48}
+  
+  local data = ffi.new("float[?]", fftSize)
+  
+  
+  for _,f in ipairs(testFrequencies) do
+    for i=0, fftSize-1 do
+      data[i] = data[i] + testAmplitude * math.cos(2*math.pi*f *i/2)
+      --print(data[i])
+    end
+  end
+  
+  --data[0] = 1
+  --Filter test:
+  --[[LP = filters.SecondOrderButterworthLP(0.1)
+  
+  for s=0, fftSize - 1 do
+    data[s] = LP(data[s])
+  end
+
+  plotFFT(data, fftSize, nil)
+  --]]
+  
+  local upSampledData = upsample4XByBlocks(data, fftSize)
+  plotFFT(upSampledData, fftSize*4,1)
+  
+end
 function X2DownsamplerTest()
   local fftSize   = 4096*2
 
-  local testFrequencies = {0.5}
+  local testFrequencies = {0.4}
   local testAmplitude = 1 / #testFrequencies
   --testFrequencies = {0.05, 0.1, 0.15, 0.2, 0.3, 0.4, 0.48}
   
@@ -256,7 +310,7 @@ function X2DownsamplerTest()
   
   
   local downsampledData = downsample2XByBlocks(data, fftSize)
-  plotFFT_Torch(data, fftSize)
+  plotFFT(downsampledData, fftSize/2,1)
   --plotSignal_Torch(downsampledData, fftSize/2,fftSize/4,fftSize/2-1)
   --plotSignal_Torch(data, fftSize, fftSize/2, fftSize-1)
   --[[local test1 = filters.SecondOrderButterworthLP(0.5)
@@ -268,4 +322,4 @@ function X2DownsamplerTest()
   
 end
 
-X2UpsamplerTest()
+X4UpsamplerTest()
