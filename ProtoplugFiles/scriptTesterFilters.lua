@@ -60,15 +60,11 @@ local function phaseUnwrap(list,in_tol)
   local tol = in_tol or math.pi - 0.1
   local prev = list[1]
   for i=2, #list do
-    local jump = math.abs(list[i] - prev)
-    if  jump > tol then
-        local o1 = list[i] + math.pi - prev
-        local o2 = list[i] - math.pi - prev
-        if math.abs(o1) < jump and math.abs(o1) < math.abs(o2) then
-          list[i] = list[i] + math.pi
-        elseif math.abs(o2) < jump then
-          list[i] = list[i] - math.pi
-        end
+    local jump = list[i] - prev
+    if  math.abs(jump) > tol then
+          jump = (jump+math.pi) % (2*math.pi)
+          jump = jump - math.pi
+          list[i] = prev + jump
     end
     prev = list[i]
   end
@@ -86,13 +82,23 @@ local function plotFFT(data, N, windowed)
   local amplitude = {}
   local phase     = {}
   
-  for i=0, N/2 do
+  j=1
+  for i=0, N/2-1 do
     --freq[#freq+1]  = -0.5 + i / (N-1)
-    freq[#freq+1]  = 2*i / N
-    amplitude[#freq+1] = 20 * math.log10(complex.abs(ret[i+1]) / N)
+    freq[j]  = 2*i / N
+    --amplitude[j] = 20 * math.log10(complex.abs(ret[i+1]) / N)
+    amplitude[j] = 2  *complex.abs(ret[i+1]) / N
+    amplitude[j] = 20*math.log10(amplitude[j])
+    phase[j]     = math.atan2(ret[i+1][2], ret[i+1][1])
+    j = j + 1
   end
   
+  phaseUnwrap(phase)
+  
+  --print(amplitude[N/4+1])
+  
   plot(freq, amplitude, "freq", "20log|H|", "amplitude")
+  --plot(freq, phase, "freq", "Phase ( rad )", "Phase")
   --local wait = io.read()
 end
 
@@ -142,7 +148,7 @@ local function plotFFT_Torch(data, N, windowed)
     --freq[#freq+1]  = -0.5 + i / (N-1)
     freq[#freq+1]  = 2*i / N
     amplitude[#freq] = 20 * math.log10(math.sqrt(ret[i+1][1]^2+ret[i+1][2]^2)/N)
-    phase[#freq]     = math.atan(ret[i+1][2]/ret[i+1][1])
+    phase[#freq]     = math.atan2(ret[i+1][2],ret[i+1][1])
   end
   
   require 'gnuplot'
@@ -226,12 +232,34 @@ local function downsample2XByBlocks(data, size)
   return outData
 end
 
+local function downsample4XByBlocks(data, size)
+  local blockSize = 64
+
+  downsampler = am.X4Downsampler()
+  
+  outData = ffi.new("float[?]", size/4)
+  
+  local numBlocks = size / blockSize
+  if size % blockSize ~= 0 then
+    error("Size must be a multiple of blocksize", 1)
+  end
+  
+  for b=0, numBlocks -1 do
+    outSamples = downsampler(data+b*blockSize, blockSize)
+    for s=0, blockSize/4-1 do
+      outData[b*blockSize/4 + s] = outSamples[s]
+    end
+  end
+  
+  return outData
+end
+
 
 function X2UpsamplerTest()
   local fftSize   = 4096
 
   local testFrequencies = {0.5}
-  local testAmplitude = 1 / #testFrequencies
+  local testAmplitude = 1 --/ #testFrequencies
   --testFrequencies = {0.05, 0.1, 0.15, 0.2, 0.3, 0.4, 0.48}
   
   local data = ffi.new("float[?]", fftSize)
@@ -256,7 +284,7 @@ function X2UpsamplerTest()
   --]]
   
   local upSampledData = upsample2XByBlocks(data, fftSize)
-  plotFFT_Torch(upSampledData, fftSize)
+  plotFFT(upSampledData, fftSize*2)
   
 end
 function X4UpsamplerTest()
@@ -292,9 +320,9 @@ function X4UpsamplerTest()
   
 end
 function X2DownsamplerTest()
-  local fftSize   = 4096*2
+  local fftSize   = 4096*4
 
-  local testFrequencies = {0.4}
+  local testFrequencies = {0.6}
   local testAmplitude = 1 / #testFrequencies
   --testFrequencies = {0.05, 0.1, 0.15, 0.2, 0.3, 0.4, 0.48}
   
@@ -310,7 +338,7 @@ function X2DownsamplerTest()
   
   
   local downsampledData = downsample2XByBlocks(data, fftSize)
-  plotFFT(downsampledData, fftSize/2,1)
+  plotFFT(downsampledData, fftSize/2)
   --plotSignal_Torch(downsampledData, fftSize/2,fftSize/4,fftSize/2-1)
   --plotSignal_Torch(data, fftSize, fftSize/2, fftSize-1)
   --[[local test1 = filters.SecondOrderButterworthLP(0.5)
@@ -322,4 +350,39 @@ function X2DownsamplerTest()
   
 end
 
-X4UpsamplerTest()
+function X4DownsamplerTest()
+  local fftSize   = 4096*4
+
+  local testFrequencies = {0.3}
+  local testAmplitude = 1 / #testFrequencies
+  --testFrequencies = {0.05, 0.1, 0.15, 0.2, 0.3, 0.4, 0.48}
+  
+  local data = ffi.new("double[?]", fftSize)
+  
+  
+  for _,f in ipairs(testFrequencies) do
+    for i=0, fftSize-1 do
+      data[i] = data[i] + testAmplitude * math.cos(2*math.pi*f *i/2)
+      --print(data[i])
+    end
+  end
+  
+  
+  local downsampledData = downsample4XByBlocks(data, fftSize)
+  --plotFFT(downsampledData, fftSize/2)
+  --local downsampledData1 = downsample2XByBlocks(data, fftSize)
+  --local downsampledData  = downsample2XByBlocks(downsampledData1, fftSize/2)
+  plotFFT(downsampledData, fftSize/4)
+  --plotSignal_Torch(downsampledData, fftSize/2,fftSize/4,fftSize/2-1)
+  --plotSignal_Torch(data, fftSize, fftSize/2, fftSize-1)
+  --[[local test1 = filters.SecondOrderButterworthLP(0.5)
+  
+  for i=0, fftSize-1 do
+    data[i] = test1(data[i])
+  end
+  plotFFT_Torch(data, fftSize,1) --]]
+  
+end
+
+X4DownsamplerTest()
+

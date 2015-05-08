@@ -115,8 +115,8 @@ function audioMath.X2Upsampler()
     local d1
     for i=0, blockSize-1 do
       d1                = z_1(inSamples[i])
-      outSamples[2*i]   = 0.25 * ( A0_2( A0_1(inSamples[i]))  + A1_2( A1_1(d1) ))
-      outSamples[2*i+1] = 0.5 * A0_3 (A1_3(inSamples[i]))
+      outSamples[2*i]   = 0.5 * ( A0_2( A0_1(inSamples[i]))  + A1_2( A1_1(d1) ))
+      outSamples[2*i+1] = A0_3 (A1_3(inSamples[i]))
     end
 
     return outSamples
@@ -160,14 +160,14 @@ function audioMath.X4Upsampler()
     local s1, s2, d1, d2, d3
     for i=0, blockSize-1 do
       d1                  = First_z_1(inSamples[i])
-      s1                  = 0.25 * ( First_A0_2( First_A0_1(inSamples[i]))  + First_A1_2( First_A1_1(d1) ))
-      s2                  = 0.5 * First_A0_3 (First_A1_3(inSamples[i]))
+      s1                  = ( First_A0_2( First_A0_1(inSamples[i]))  + First_A1_2( First_A1_1(d1) ))
+      s2                  = 2 * First_A0_3 (First_A1_3(inSamples[i]))
       d2                  = Second_z_1(s1)
       d3                  = Second_z_1(s2)
-      outSamples[4*i + 0] = 0.25 * ( Second_A0_2( Second_A0_1(s1))  + Second_A1_2( Second_A1_1(d2) ))
-      outSamples[4*i + 1] = 0.5 * Second_A0_3 (Second_A1_3(s1))
-      outSamples[4*i + 2] = 0.25 * ( Second_A0_2( Second_A0_1(s2))  + Second_A1_2( Second_A1_1(d3) ))
-      outSamples[4*i + 3] = 0.5 * Second_A0_3 (Second_A1_3(s2))
+      outSamples[4*i + 0] = 0.5 * ( Second_A0_2( Second_A0_1(s1))  + Second_A1_2( Second_A1_1(d2) ))
+      outSamples[4*i + 1] = Second_A0_3 (Second_A1_3(s1))
+      outSamples[4*i + 2] = 0.5 * ( Second_A0_2( Second_A0_1(s2))  + Second_A1_2( Second_A1_1(d3) ))
+      outSamples[4*i + 3] = Second_A0_3 (Second_A1_3(s2))
     end
 
     return outSamples
@@ -175,8 +175,8 @@ function audioMath.X4Upsampler()
 end
 
 function audioMath.X2Downsampler()
-  --[[Polyphase IIR decomposition of 5th order buttworth with normalised cutoff at 0.5 ( half Nyquist)
-  used for interpolation: --]]
+  --Polyphase IIR decomposition of 5th order buttworth with normalised cutoff at 0.5 ( half Nyquist)
+  --used for decimation, and applied twice in series
   local bufferSize = 1024
   local outSamples = ffi.new("float[?]", bufferSize)
   
@@ -217,6 +217,70 @@ function audioMath.X2Downsampler()
       s4 = z_1_2(s2)
       outSamples[i] = 0.25 * ( A0_2( A0_1(inSamples[2*i]))  + A1_2( A1_1(s3) )) + 0.5 * A0_3 (A1_3(s1)) 
     --]]
+    end
+
+    return outSamples
+  end
+end
+
+function audioMath.X4Downsampler()
+  --Essentially two X2Downsamplers applied in series, but unrolled into a single loop
+  local bufferSize = 1024
+  local outSamples = ffi.new("float[?]", bufferSize)
+  
+  --First stage of 2X downsampling
+  --Polyphase IIR decomposition of 5th order buttworth with normalised cutoff at 0.5 ( half Nyquist)
+  --used for decimation, and applied twice in series
+  local First_A0_1 = filters.FirstOrderAllPassTDF2(2/(10 + 4*math.sqrt(5)))
+  local First_A0_2 = filters.FirstOrderAllPassTDF2(2/(10 + 4*math.sqrt(5)))
+  local First_A0_3 = filters.FirstOrderAllPassTDF2(2/(10 + 4*math.sqrt(5)))
+  local First_A1_1 = filters.FirstOrderAllPassTDF2((10 - 4*math.sqrt(5))/2)
+  local First_A1_2 = filters.FirstOrderAllPassTDF2((10 - 4*math.sqrt(5))/2)
+  local First_A1_3 = filters.FirstOrderAllPassTDF2((10 - 4*math.sqrt(5))/2)
+  local First_z_1_1  = filters.OneSampleDelay()
+  local First_z_1_2  = filters.OneSampleDelay()
+
+  --Second stage of 2X downsampling
+  local Second_A0_1 = filters.FirstOrderAllPassTDF2(2/(10 + 4*math.sqrt(5)))
+  local Second_A0_2 = filters.FirstOrderAllPassTDF2(2/(10 + 4*math.sqrt(5)))
+  local Second_A0_3 = filters.FirstOrderAllPassTDF2(2/(10 + 4*math.sqrt(5)))
+  local Second_A1_1 = filters.FirstOrderAllPassTDF2((10 - 4*math.sqrt(5))/2)
+  local Second_A1_2 = filters.FirstOrderAllPassTDF2((10 - 4*math.sqrt(5))/2)
+  local Second_A1_3 = filters.FirstOrderAllPassTDF2((10 - 4*math.sqrt(5))/2)
+  local Second_z_1_1  = filters.OneSampleDelay()
+  local Second_z_1_2  = filters.OneSampleDelay()
+  
+  
+  return function(inSamples, blockSize)
+    if bufferSize < blockSize / 4 then
+      bufferSize = blockSize / 4
+      outSamples = ffi.new("float[?]", bufferSize) 
+    end
+    
+    
+    local fs1, fs2, fs3, fs4
+    local ss1, ss2, ss3, ss4
+    local twoXSample1, twoXSample2
+
+    for i=0, blockSize/4 - 1 do
+      fs1 = First_z_1_1(inSamples[4*i])
+      fs2 = First_z_1_1(inSamples[4*i+1])
+      fs3 = First_z_1_2(fs1)
+      fs4 = First_z_1_2(fs2)
+      twoXSample1 = 0.25 * ( First_A0_2( First_A0_1(inSamples[4*i]))  + First_A1_2( First_A1_1(fs3) )) + 0.5 * First_A0_3 (First_A1_3(fs1)) 
+
+      fs1 = First_z_1_1(inSamples[4*i+2])
+      fs2 = First_z_1_1(inSamples[4*i+3])
+      fs3 = First_z_1_2(fs1)
+      fs4 = First_z_1_2(fs2)
+      twoXSample2 = 0.25 * ( First_A0_2( First_A0_1(inSamples[4*i+2]))  + First_A1_2( First_A1_1(fs3) )) + 0.5 * First_A0_3 (First_A1_3(fs1)) 
+
+      ss1 = Second_z_1_1(twoXSample1)
+      ss2 = Second_z_1_1(twoXSample2)
+      ss3 = Second_z_1_2(ss1)
+      ss4 = Second_z_1_2(ss2)
+      outSamples[i] = 0.25 * ( Second_A0_2( Second_A0_1(twoXSample1))  + Second_A1_2( Second_A1_1(ss3) )) + 0.5 * Second_A0_3 (Second_A1_3(ss1)) 
+
     end
 
     return outSamples
