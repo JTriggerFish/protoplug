@@ -29,6 +29,10 @@ typedef struct _SecondOrderIIR
   double s1;
   double s2;
 }SecondOrderIIR;
+typedef struct _Integrator
+{
+  double s; //state
+} Integrator;
 ]]
 
 filter.static = {}
@@ -42,7 +46,42 @@ function filter.OneSampleDelay()
   end
 end
 
+function filter.LinearIntegratorZDF()
+  local data = ffi.new("Integrator")  -- note the scruct will be zero filled by ffi.new
+  return function(x, g --[[cutoff - expected to have been computed as tan(pi/2 * freq/sampleRate)--]])
+    local v = (x - data.s) * g / (1+g)
+    local y = v + data.s
+    data.s  = y + v
+    return y
+  end
+end
 
+function filter.NonLinearIntegratorZDF()
+  --[[Like LinearIntegratorZDF but with a tanh on the input and on the feedback loop.
+  -- Note that the zero delay on the feedback loop involves solving a non linear equation
+  -- with no closed form by using Newton Raphson
+  --]]
+  local data = ffi.new("Integrator")  -- note the scruct will be zero filled by ffi.new
+  return function(x, g --[[cutoff - expected to have been computed as tan(pi/2 * freq/sampleRate)--]])
+    local tanh = math.tanh
+    local xs = tanh(x)
+    local v = g * xs + data.s
+    
+    --Solving y + g*tanh(y) - v = 0
+    --by 4 iterations of Newton Raphson method, using the initial guess
+    --from the linear case, and the known derivative  1 + g*(1-tanh^2(y))
+    local y = 1/(1+g) * v --initial guess
+    
+    for i = 1, 4 do
+      local f  = y + g*tanh(y) - v
+      local df = 1 + g*(1 - (tanh(y))^2)
+      y        = y - f / df
+    end
+    
+    data.s  = g*( xs - tanh(y)) + y
+    return y
+  end
+end
 function filter.FirstOrderAllPassTDF2(coeff)
   local data = ffi.new("FirstOrderAllPass") -- note the scruct will be zero filled by ffi.new
   data.a = coeff

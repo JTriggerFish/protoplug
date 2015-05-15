@@ -102,6 +102,24 @@ local function plotFFT(data, N, windowed)
   --local wait = io.read()
 end
 
+local function plotSignal(data, N, from, to)
+  from = from or 0
+  to   = to   or N-1
+  local t = {}
+  local vals = {}
+  j=0
+  for i=from, to do
+    t[j+1]    = i
+    vals[j+1] = data[i]
+    j = j + 1
+  end
+
+  
+  plot(t, vals, "t", "values", "signal")
+  --plot(freq, phase, "freq", "Phase ( rad )", "Phase")
+  --local wait = io.read()
+end
+
 local function plotSignal_Torch(data, N, from, to)
   from = from or 0
   to   = to   or N-1
@@ -384,5 +402,58 @@ function X4DownsamplerTest()
   
 end
 
-X4DownsamplerTest()
+function NonLinearIntegratorTest()
+  local fftSize   = 4096
 
+  local testFrequencies = {0.3}
+  local testAmplitude   = 4
+  --testFrequencies = {0.05, 0.1, 0.15, 0.2, 0.3, 0.4, 0.48}
+  
+  local data = ffi.new("double[?]", fftSize)
+  
+  --TODO test with dithering at -72DB / -80 DB
+  
+  for _,f in ipairs(testFrequencies) do
+    for i=0, fftSize-1 do
+      data[i] = data[i] + testAmplitude * math.cos(2*math.pi*f *i/2)
+      --print(data[i])
+    end
+  end
+  
+  local nonLinearIntegrator = filters.NonLinearIntegratorZDF()
+  local cutoff = 0.99
+  
+  
+  local upSampledData = upsample4XByBlocks(data, fftSize)
+  
+  for i=0, fftSize - 1 do
+    --data[i] = math.tanh(data[i])
+    
+    --! note careful : sample rate has changed here so 
+    -- we need to update the normalised cutoff
+    -- in order to keep the same asbolute frequency
+    local g      = math.tan(math.pi / 2 * cutoff / 4)
+    upSampledData[i] = nonLinearIntegrator(upSampledData[i],g)
+  end
+  
+  data = downsample4XByBlocks(upSampledData, fftSize*4)
+
+  
+  --plotFFT(downsampledData, fftSize/2)
+  --local downsampledData1 = downsample2XByBlocks(data, fftSize)
+  --local downsampledData  = downsample2XByBlocks(downsampledData1, fftSize/2)
+  --plotSignal(data, fftSize,100,200)
+  plotFFT(data, fftSize,1)
+  --plotSignal_Torch(downsampledData, fftSize/2,fftSize/4,fftSize/2-1)
+  --plotSignal_Torch(data, fftSize, fftSize/2, fftSize-1)
+  --[[local test1 = filters.SecondOrderButterworthLP(0.5)
+  
+  for i=0, fftSize-1 do
+    data[i] = test1(data[i])
+  end
+  plotFFT_Torch(data, fftSize,1) --]]
+  
+end
+
+--X4DownsamplerTest()
+NonLinearIntegratorTest()
