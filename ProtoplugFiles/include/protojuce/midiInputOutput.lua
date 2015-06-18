@@ -3,14 +3,14 @@
 --- MidiOutput
 -- wrap functionality from [JUCE MidiOutput](https://www.juce.com/api/classMidiOutput.html)
 ffi.cdef [[
-struct pStringList
+typedef struct pStringList
 {
 	char** strings;
 	int listSize;
-};
+} pStringList;
 pStringList getMidiInputDevices();
 pStringList getMidiOutputDevices();
-void StringList_delete(pStringList l)
+void StringList_delete(pStringList l);
 ]]
 
 local MidiInput = {}
