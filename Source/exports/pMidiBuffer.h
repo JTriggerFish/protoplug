@@ -88,7 +88,8 @@ PROTO_API pMidiInput openMidiInputDevice(int deviceIndex)
 	if (input.i)
 	{
 		input.i->start();
-		input.errMsg = NULL;
+		input.errMsg = new char[512];
+        input.errMsg[0] = '\0';
 	}
 	else
 	{
@@ -122,7 +123,8 @@ PROTO_API pMidiOutput openMidiOutputDevice(int deviceIndex)
 	if (output.o)
 	{
 		output.o->startBackgroundThread();
-		output.errMsg = NULL;
+		output.errMsg = new char[512];
+        output.errMsg[0] = '\0';
 	}
 	else
 	{
