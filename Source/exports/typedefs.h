@@ -255,18 +255,16 @@ exMouseWheelDetails MouseWheelDetails2Struct (const MouseWheelDetails& _d)
 //Midi input and output related clases
 struct pMidiOutput
 {
-	MidiOutput *o;
+	MidiOutput* o;
 
-	String                _errMsg;
-	const char*			  errMsg;
+	char*	    errMsg;
 };
 struct pMidiInput
 {
 	MidiInput*            i;
 	MidiMessageCollector* collector;
 
-	String                _errMsg;
-	const char*			  errMsg;
+	char*			      errMsg;
 };
 
 struct pStringList

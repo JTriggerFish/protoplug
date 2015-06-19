@@ -18,6 +18,9 @@ ffi.cdef [[
 typedef struct pMidiBuffer
 { void *pointer; } pMidiBuffer;
 
+PROTO_API pMidiBuffer MidiBuffer_new();
+PROTO_API pMidiBuffer MidiBuffer_delete();
+
 uint8_t *MidiBuffer_getDataPointer(pMidiBuffer mb);
 int MidiBuffer_getDataSize(pMidiBuffer mb);
 void MidiBuffer_resizeData(pMidiBuffer mb, int size);
@@ -30,6 +33,32 @@ typedef struct MidiEvent
 	const uint16_t dataSize;
 	uint8_t data[?];
 } MidiEvent;
+
+//Midi input and output:
+typdef struct pMidiOutput
+{
+	MidiOutput* o;
+
+	char*	    errMsg;
+} pMidiOutput;
+typedef struct pMidiInput
+{
+	MidiInput*            i;
+	MidiMessageCollector* collector;
+
+	char*			      errMsg;
+} pMidiInput;
+void MidiInput_delete(pMidiInput input);
+void MidiOutput_delete (pMidiOutput output);
+
+pStringList getMidiInputDevices();
+pStringList getMidiOutputDevices();
+
+pMidiInput openMidiInputDevice(int deviceIndex);
+pMidiOutput openMidiOutputDevice(int deviceIndex);
+
+void MidiInput_collectNextBlockOfMessages(pMidiInput i, pMidiBuffer buffer, int numSamples);
+void MidiOutput_sendBlockOfMessages(pMidiOutput output, pMidiBuffer buffer, double samplesPerSecondForBuffer);
 ]]
 
 local midi = {}
@@ -375,5 +404,95 @@ local MidiEvent_mt = {
 -- @field Event.data
 
 ffi.metatype("MidiEvent", MidiEvent_mt)
+
+--- MidiInput
+-- wrap functionality from [JUCE MidiInput](http://www.juce.com/api/classMidiInput.html)
+midi.MidiInut = {}
+
+--- Midi input device list
+-- Caution: the return object is a list of strings starting at 1 as per Lua's convention,
+-- but the corresponding integer to use with openDevice starts as 0 as per C convention,
+-- so in practice one should use an offset of -1
+-- @treturn list of strings
+-- @function MidiInput.getDevices()
+function midi.MidiInput.getDevices()
+    local cList = ffi.gc(protolib.getMidiInputDevices(), protolib.StringList_delete)
+    local sList = {}
+    for i=0, cList.listSize-1 do
+        sList[#sList+1] = ffi.string(cList.strings[i])
+    end
+    return sList
+end
+--- Open a midi device for input
+-- @param deviceIndex : see MidiInput.getDevices(), with an offset of -1
+-- @function MidiInput.openDevice()
+function midi.MidiInput.openDevice(deviceIndex)
+    local i = {}
+    i.pMidiInput = protolib.openMidiInputDevice(deviceIndex)
+    errMsg = ffi.string(i.pMidiInput.errMsg)
+    if not (errMsg == nil or errMsg = '') then
+        error("Could not open device for midi input: "..errMsg)
+    end
+
+    i.buffer = ffi.gc(protolib.MidiBuffer_new(), protolib.MidiBuffer_delete())
+    i.buffer = ffi.typeof("pMidiBuffer")(i.buffer)
+
+    --- Collect block of messages from the input's message collector
+    -- see [JUCE MidiMessageCollector](http://www.juce.com/api/classMidiMessageCollector.html#ac72b6cf4965e63b90d1a2402b73b1798)
+    -- this function has to be called from plugin.processBLock
+    -- @param numSamples : comes from processBlock
+    -- @function MidiInput:collectNextBlockOfMessages
+    function i:collectNextBlockOfMessages(numSamples)
+        self.buffer:clear() --TODO check we really want / need to do this
+        protolib.MidiInput_collectNextBlockOfMessages(self.pMidiInput, self.buffer, numSamples)
+        return self.buffer
+    end
+
+    return i
+end
+--- MidiOutput
+-- wrap functionality from [JUCE MidiOutput](http://www.juce.com/api/classMidiOutput.html)
+midi.MidiOutput = {}
+--- Midi output device list
+-- Caution: the return object is a list of strings starting at 1 as per Lua's convention,
+-- but the corresponding integer to use with openDevice starts as 0 as per C convention,
+-- so in practice one should use an offset of -1
+-- @treturn list of strings
+-- @function MidiInput.getDevices()
+function midi.MidiOutput.getDevices()
+    local cList = ffi.gc(protolib.getMidiOutputDevices(), protolib.StringList_delete)
+    local sList = {}
+    for i=0, cList.listSize-1 do
+        sList[#sList+1] = ffi.string(cList.strings[i])
+    end
+    return sList
+end
+--- Open a midi device for output
+-- @param deviceIndex : see MidiOutput.getDevices(), with an offset of -1
+-- @function MidiOutput.openDevice()
+function midi.MidiOutput.openDevice(deviceIndex)
+    local o = {}
+    o.pMidiOutput = protolib.openMidiOutputDevice(deviceIndex)
+    errMsg = ffi.string(o.pMidiOutput.errMsg)
+    if not (errMsg == nil or errMsg = '') then
+        error("Could not open device for midi output: "..errMsg)
+    end
+
+    o.buffer = ffi.gc(protolib.MidiBuffer_new(), protolib.MidiBuffer_delete())
+    o.buffer = ffi.typeof("pMidiBuffer")(o.buffer)
+
+    --- Send block of messages to the midi output
+    -- from the output object's buffer
+    -- see [JUCE MidiOuput](https://www.juce.com/api/classMidiOutput.html#a250a8b0691928959e09b84f7bc7593a1)
+    -- this function has to be called from plugin.processBLock
+    -- @param sampleRate : send it from processBlock
+    -- @function MidiInput:collectNextBlockOfMessages
+    function o:sendBlockOfMessages(sampleRate)
+        protolib.MidiOutput_sendBlockOfMessages(self.pMidiOutput, self.buffer, sampleRate)
+        self.buffer:clear() --TODO check we really want / need to do this
+    end
+
+    return o
+end
 
 return midi

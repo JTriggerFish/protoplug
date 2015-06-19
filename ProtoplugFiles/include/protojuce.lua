@@ -27,6 +27,5 @@ J.Image 			        = require"include/protojuce/image"
 J.Justification		        = require"include/protojuce/justification"
 J.Point		 		        = require"include/protojuce/point"
 J.Line		 		        = require"include/protojuce/line"
-J.MidiInput, J.MidiOutput   = require"include/protojuce/midiInputOutput"
 
 return J

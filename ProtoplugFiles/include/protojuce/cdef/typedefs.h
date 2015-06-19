@@ -131,3 +131,11 @@ typedef struct MouseWheelDetails
 	bool isReversed;
 	bool isSmooth;
 } MouseWheelDetails;
+
+typedef struct pStringList
+{
+	char** strings;
+	int listSize;
+} pStringList;
+
+void StringList_delete(pStringList l);

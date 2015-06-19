@@ -12,6 +12,17 @@
 
 #include "typedefs.h"
 
+PROTO_API pMidiBuffer MidiBuffer_new()
+{
+	pMidiBuffer buff;
+	buff.m = new MidiBuffer();
+	return buff;
+}
+PROTO_API void MidiBuffer_delete(pMidiBuffer mb)
+{
+	if (mb.m)
+		delete mb.m;
+}
 
 PROTO_API uint8 *MidiBuffer_getDataPointer(pMidiBuffer mb)
 {
@@ -81,17 +92,27 @@ PROTO_API pMidiInput openMidiInputDevice(int deviceIndex)
 	}
 	else
 	{
-		input._errMsg = String("Failed to open input device");
-		input.errMsg = input._errMsg.toRawUTF8();
+		input.errMsg = new char[512];
+		sprintf(input.errMsg, "Failed to open input device %d", deviceIndex);
 	}
 
 	return input;
 }
+PROTO_API void MidiInput_collectNextBlockOfMessages(pMidiInput i, pMidiBuffer buffer, int numSamples)
+{
+	i.collector->removeNextBlockOfMessages(*buffer.m, numSamples);
+}
 PROTO_API void MidiInput_delete(pMidiInput input)
 {
-	input.i->stop();
-	delete input.i;
-	delete input.collector;
+	if (input.i)
+	{
+		input.i->stop();
+		delete input.i;
+	}
+	if (input.collector)
+		delete input.collector;
+	if (input.errMsg)
+		delete[] input.errMsg;
 }
 PROTO_API pMidiOutput openMidiOutputDevice(int deviceIndex)
 {
@@ -101,17 +122,28 @@ PROTO_API pMidiOutput openMidiOutputDevice(int deviceIndex)
 	if (output.o)
 	{
 		output.o->startBackgroundThread();
+		output.errMsg = NULL;
 	}
 	else
 	{
-		output._errMsg = String("Failed to open input device");
-		output.errMsg = output._errMsg.toRawUTF8();
+		output.errMsg = new char[512];
+		sprintf(output.errMsg, "Failed to open output device %d", deviceIndex);
 	}
 	return output;
 }
+PROTO_API void MidiOutput_sendBlockOfMessages(pMidiOutput output, pMidiBuffer buffer, double samplesPerSecondForBuffer)
+{
+	double milisecondCounterToStartAt = Time::getMillisecondCounter() + 0.1; //Send right now, TODO check this works properly
+	output.o->sendBlockOfMessages(*buffer.m, milisecondCounterToStartAt, samplesPerSecondForBuffer);
+}
 PROTO_API void MidiOutput_delete (pMidiOutput output)
 {
-	output.o->clearAllPendingMessages();
-	output.o->stopBackgroundThread();
-	delete output.o;
+	if (output.o)
+	{
+		output.o->clearAllPendingMessages();
+		output.o->stopBackgroundThread();
+		delete output.o;
+	}
+	if (output.errMsg)
+		delete[] output.errMsg;
 }
