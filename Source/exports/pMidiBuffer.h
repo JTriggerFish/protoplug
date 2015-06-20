@@ -12,18 +12,6 @@
 
 #include "typedefs.h"
 
-PROTO_API pMidiBuffer MidiBuffer_new()
-{
-	pMidiBuffer buff;
-	buff.m = new MidiBuffer();
-	return buff;
-}
-PROTO_API void MidiBuffer_delete(pMidiBuffer mb)
-{
-	if (mb.m)
-		delete mb.m;
-}
-
 PROTO_API uint8 *MidiBuffer_getDataPointer(pMidiBuffer mb)
 {
 	return mb.m->data.getRawDataPointer();
@@ -88,6 +76,7 @@ PROTO_API pMidiInput openMidiInputDevice(int deviceIndex)
 	if (input.i)
 	{
 		input.i->start();
+        input.buffer = new MidiBuffer();
 		input.errMsg = new char[512];
         input.errMsg[0] = '\0';
 	}
@@ -95,13 +84,25 @@ PROTO_API pMidiInput openMidiInputDevice(int deviceIndex)
 	{
 		input.errMsg = new char[512];
 		sprintf(input.errMsg, "Failed to open input device %d", deviceIndex);
+        input.buffer = NULL;
 	}
+
 
 	return input;
 }
-PROTO_API void MidiInput_collectNextBlockOfMessages(pMidiInput i, pMidiBuffer buffer, int numSamples)
+PROTO_API pMidiBuffer MidiInput_collectNextBlockOfMessages(pMidiInput i, int numSamples)
 {
-	i.collector->removeNextBlockOfMessages(*buffer.m, numSamples);
+    i.buffer->clear();
+	i.collector->removeNextBlockOfMessages(*(i.buffer), numSamples);
+    pMidiBuffer p;
+    p.m = i.buffer;
+    return p;
+}
+PROTO_API pMidiBuffer MidiInput_getMidiBuffer(pMidiInput input)
+{
+    pMidiBuffer p;
+    p.m = input.buffer;
+    return p;
 }
 PROTO_API void MidiInput_delete(pMidiInput input)
 {
@@ -112,6 +113,11 @@ PROTO_API void MidiInput_delete(pMidiInput input)
 	}
 	if (input.collector)
 		delete input.collector;
+    if(input.buffer)
+    {
+        input.buffer->clear();
+        delete input.buffer;
+    }
 	if (input.errMsg)
 		delete[] input.errMsg;
 }
@@ -123,6 +129,7 @@ PROTO_API pMidiOutput openMidiOutputDevice(int deviceIndex)
 	if (output.o)
 	{
 		output.o->startBackgroundThread();
+        output.buffer = new MidiBuffer();
 		output.errMsg = new char[512];
         output.errMsg[0] = '\0';
 	}
@@ -130,13 +137,20 @@ PROTO_API pMidiOutput openMidiOutputDevice(int deviceIndex)
 	{
 		output.errMsg = new char[512];
 		sprintf(output.errMsg, "Failed to open output device %d", deviceIndex);
+        output.buffer = NULL;
 	}
 	return output;
 }
-PROTO_API void MidiOutput_sendBlockOfMessages(pMidiOutput output, pMidiBuffer buffer, double samplesPerSecondForBuffer)
+PROTO_API pMidiBuffer MidiOutput_getMidiBuffer(pMidiOutput output)
+{
+    pMidiBuffer p;
+    p.m = output.buffer;
+    return p;
+}
+PROTO_API void MidiOutput_sendMessagesFromBuffer(pMidiOutput output, double samplesPerSecondForBuffer)
 {
 	double milisecondCounterToStartAt = Time::getMillisecondCounter() + 0.1; //Send right now, TODO check this works properly
-	output.o->sendBlockOfMessages(*buffer.m, milisecondCounterToStartAt, samplesPerSecondForBuffer);
+	output.o->sendBlockOfMessages(*output.buffer, milisecondCounterToStartAt, samplesPerSecondForBuffer);
 }
 PROTO_API void MidiOutput_delete (pMidiOutput output)
 {
@@ -146,6 +160,11 @@ PROTO_API void MidiOutput_delete (pMidiOutput output)
 		output.o->stopBackgroundThread();
 		delete output.o;
 	}
+    if(output.buffer)
+    {
+        output.buffer->clear();
+        delete output.buffer;
+    }
 	if (output.errMsg)
 		delete[] output.errMsg;
 }

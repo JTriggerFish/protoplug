@@ -256,6 +256,7 @@ exMouseWheelDetails MouseWheelDetails2Struct (const MouseWheelDetails& _d)
 struct pMidiOutput
 {
 	MidiOutput* o;
+    MidiBuffer* buffer;
 
 	char*	    errMsg;
 };
@@ -263,6 +264,7 @@ struct pMidiInput
 {
 	MidiInput*            i;
 	MidiMessageCollector* collector;
+    MidiBuffer*           buffer;
 
 	char*			      errMsg;
 };

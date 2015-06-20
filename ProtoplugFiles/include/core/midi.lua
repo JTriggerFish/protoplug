@@ -18,9 +18,6 @@ ffi.cdef [[
 typedef struct pMidiBuffer
 { void *pointer; } pMidiBuffer;
 
-pMidiBuffer MidiBuffer_new();
-pMidiBuffer MidiBuffer_delete();
-
 uint8_t *MidiBuffer_getDataPointer(pMidiBuffer mb);
 int MidiBuffer_getDataSize(pMidiBuffer mb);
 void MidiBuffer_resizeData(pMidiBuffer mb, int size);
@@ -38,12 +35,14 @@ typedef struct MidiEvent
 typedef struct pMidiOutput
 {
 	void* o;
+    void* buffer;
 	char* errMsg;
 } pMidiOutput;
 typedef struct pMidiInput
 {
 	void*    i;
 	void*    collector;
+    void*    buffer;
 	char*	 errMsg;
 } pMidiInput;
 void MidiInput_delete(pMidiInput input);
@@ -55,8 +54,11 @@ pStringList getMidiOutputDevices();
 pMidiInput openMidiInputDevice(int deviceIndex);
 pMidiOutput openMidiOutputDevice(int deviceIndex);
 
-void MidiInput_collectNextBlockOfMessages(pMidiInput i, pMidiBuffer buffer, int numSamples);
-void MidiOutput_sendBlockOfMessages(pMidiOutput output, pMidiBuffer buffer, double samplesPerSecondForBuffer);
+pMidiBuffer MidiOutput_getMidiBuffer(pMidiOutput output);
+pMidiBuffer MidiInput_getMidiBuffer(pMidiInput input);
+
+pMidiBuffer MidiInput_collectNextBlockOfMessages(pMidiInput i, int numSamples);
+void MidiOutput_sendMessagesFromBuffer(pMidiOutput output, double samplesPerSecondForBuffer);
 ]]
 
 local midi = {}
@@ -426,7 +428,7 @@ end
 -- @function MidiInput.openDevice()
 function midi.MidiInput.openDevice(deviceIndex)
     local i = {}
-    i.pMidiInput = protolib.openMidiInputDevice(deviceIndex)
+    i.pMidiInput = ffi.gc(protolib.openMidiInputDevice(deviceIndex), protolib.MidiInput_delete)
 
     print("Opened input device successfully")
 
@@ -436,11 +438,11 @@ function midi.MidiInput.openDevice(deviceIndex)
     end
 
 
-    --i.buffer = ffi.gc(protolib.MidiBuffer_new(), protolib.MidiBuffer_delete())
-    i.buffer = protolib.MidiBuffer_new()
-    i.buffer = ffi.typeof("pMidiBuffer")(i.buffer)
-
-    print("Midi input buffer created")
+    function i:getMidiBuffer()
+        local buffer = protolib.MidiInput_getMidiBuffer(self.pMidiInput)
+        buffer = ffi.typeof("pMidiBuffer")(buffer)
+        return buffer
+    end
 
     --- Collect block of messages from the input's message collector
     -- see [JUCE MidiMessageCollector](http://www.juce.com/api/classMidiMessageCollector.html#ac72b6cf4965e63b90d1a2402b73b1798)
@@ -448,12 +450,9 @@ function midi.MidiInput.openDevice(deviceIndex)
     -- @param numSamples : comes from processBlock
     -- @function MidiInput:collectNextBlockOfMessages
     function i:collectNextBlockOfMessages(numSamples)
-        self.buffer:clear() --TODO check we really want / need to do this
-        protolib.MidiInput_collectNextBlockOfMessages(self.pMidiInput, self.buffer, numSamples)
-        for ev in self.buffer:eachEvent() do
-            print(ev)
-        end
-        return self.buffer
+        local buffer = protolib.MidiInput_collectNextBlockOfMessages(self.pMidiInput, numSamples)
+        buffer = ffi.typeof("pMidiBuffer")(buffer)
+        return buffer
     end
     
     return i
@@ -481,7 +480,7 @@ end
 -- @function MidiOutput.openDevice()
 function midi.MidiOutput.openDevice(deviceIndex)
     local o = {}
-    o.pMidiOutput = protolib.openMidiOutputDevice(deviceIndex)
+    o.pMidiOutput = ffi.gc(protolib.openMidiOutputDevice(deviceIndex), protolib.MidiOutput_delete)
     local errMsg = ffi.string(o.pMidiOutput.errMsg)
     if not (errMsg == nil or errMsg == '') then
         error("Could not open device for midi output: "..errMsg)
@@ -489,22 +488,23 @@ function midi.MidiOutput.openDevice(deviceIndex)
 
     print("Opened output device successfully")
 
-    --o.buffer = ffi.gc(protolib.MidiBuffer_new(), protolib.MidiBuffer_delete())
-    o.buffer = protolib.MidiBuffer_new()
-    o.buffer = ffi.typeof("pMidiBuffer")(o.buffer)
-
-    print("Midi output buffer created")
-
+    function o:getMidiBuffer()
+        local buffer = protolib.MidiOutput_getMidiBuffer(self.pMidiOutput)
+        buffer = ffi.typeof("pMidiBuffer")(buffer)
+        return buffer
+    end
 
     --- Send block of messages to the midi output
-    -- from the output object's buffer
+    -- from the output object's buffer.
     -- see [JUCE MidiOuput](https://www.juce.com/api/classMidiOutput.html#a250a8b0691928959e09b84f7bc7593a1)
+    -- Note that the buffer will be cleared after sending.
     -- this function has to be called from plugin.processBLock
     -- @param sampleRate : send it from processBlock
-    -- @function MidiInput:collectNextBlockOfMessages
-    function o:sendBlockOfMessages(sampleRate)
-        protolib.MidiOutput_sendBlockOfMessages(self.pMidiOutput, self.buffer, sampleRate)
-        self.buffer:clear() --TODO check we really want / need to do this
+    -- @function MidiInput:sendMessagesFromBuffer
+    function o:sendMessagesFromBuffer(sampleRate)
+        protolib.MidiOutput_sendMessagesFromBuffer(self.pMidiOutput, sampleRate)
+        local buffer = self:getMidiBuffer()
+        buffer:clear() --TODO check we really want / need to do this
     end
 
     return o
