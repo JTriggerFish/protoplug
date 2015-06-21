@@ -1,5 +1,4 @@
 require "include/protoplug"
-local J = require "include/protojuce"
 
 --Welcome to Lua Protoplug generator (version 1.3.0)
 
@@ -18,22 +17,26 @@ end
 local pushInput  = midi.MidiInput.openDevice(#inputDevices-1)
 local pushOutput = midi.MidiOutput.openDevice(#outputDevices-1)
 
-for i=0,10000 do
-	local midiBuf = pushInput:collectNextBlockOfMessages(64) 
-	for ev in midiBuf:eachEvent() do
-		print(ev)
-	end
-end
-
+--init
 local outBuffer = pushOutput:getMidiBuffer()
 for cc=0,127 do
 	for val=20, 40 do
 		outBuffer:addEvent(midi.Event.control(1, cc, 1))
 	end
 end
-for color=0,127 do
-	for note=0,127 do
-			outBuffer:addEvent(midi.Event.noteOn(1, note, color))
-	end
-	pushOutput:sendMessagesFromBuffer(44100)   
+for note=0,127 do
+    outBuffer:addEvent(midi.Event.noteOn(1, note, 0))
 end
+pushOutput:sendMessagesFromBuffer(44100)   
+
+function plugin.processBlock(samples, smax, midiBuf)
+	local pushInputBuf  = pushInput:collectNextBlockOfMessages(smax) 
+    local pushOutputBuf = pushOutput:getMidiBuffer()
+
+    for ev in pushInputBuf:eachEvent() do
+        pushOutputBuf:addEvent(ev)
+    end
+    pushOutput:sendMessagesFromBuffer(plugin.getSampleRate())   
+end
+
+

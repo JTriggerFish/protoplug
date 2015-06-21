@@ -58,7 +58,7 @@ pMidiBuffer MidiOutput_getMidiBuffer(pMidiOutput output);
 pMidiBuffer MidiInput_getMidiBuffer(pMidiInput input);
 
 pMidiBuffer MidiInput_collectNextBlockOfMessages(pMidiInput i, int numSamples);
-void MidiOutput_sendMessagesFromBuffer(pMidiOutput output, double samplesPerSecondForBuffer);
+void MidiOutput_sendMessagesFromBuffer(pMidiOutput output, double samplesPerSecondForBuffer, double delayInMilliseconds);
 ]]
 
 local midi = {}
@@ -501,8 +501,10 @@ function midi.MidiOutput.openDevice(deviceIndex)
     -- this function has to be called from plugin.processBLock
     -- @param sampleRate : send it from processBlock
     -- @function MidiInput:sendMessagesFromBuffer
-    function o:sendMessagesFromBuffer(sampleRate)
-        protolib.MidiOutput_sendMessagesFromBuffer(self.pMidiOutput, sampleRate)
+    function o:sendMessagesFromBuffer(sampleRate, delayInMiliseconds)
+        delay = delayInMiliseconds or 0
+        delay = math.max(delay, 0)
+        protolib.MidiOutput_sendMessagesFromBuffer(self.pMidiOutput, sampleRate, delay)
         local buffer = self:getMidiBuffer()
         buffer:clear() --TODO check we really want / need to do this
     end

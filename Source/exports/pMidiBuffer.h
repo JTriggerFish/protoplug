@@ -147,9 +147,9 @@ PROTO_API pMidiBuffer MidiOutput_getMidiBuffer(pMidiOutput output)
     p.m = output.buffer;
     return p;
 }
-PROTO_API void MidiOutput_sendMessagesFromBuffer(pMidiOutput output, double samplesPerSecondForBuffer)
+PROTO_API void MidiOutput_sendMessagesFromBuffer(pMidiOutput output, double samplesPerSecondForBuffer, double delayInMiliseconds)
 {
-	double milisecondCounterToStartAt = Time::getMillisecondCounter() + 0.1; //Send right now, TODO check this works properly
+	double milisecondCounterToStartAt = Time::getMillisecondCounter() + delayInMiliseconds;
 	output.o->sendBlockOfMessages(*output.buffer, milisecondCounterToStartAt, samplesPerSecondForBuffer);
 }
 PROTO_API void MidiOutput_delete (pMidiOutput output)
