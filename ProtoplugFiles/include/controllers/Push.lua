@@ -34,28 +34,41 @@ function Push.newPushState()
     local PushState = {}
 
     ---Pads
-    local Pads = {}
+    local Pads    = {}
+    Pads.color    = {}
+    Pads.pressed  = {}
     PushState.Pads = Pads
 
     for i=1,64 do
-        Pads[#Pads+1] = Push.Colors.PadsColors.Black
+        Pads.color[#Pads.color+1]     = Push.Colors.PadsColors.Black
+        Pads.pressed[#Pads.pressed+1] = 0
     end
 
-    function Pads:get(i,j)
-        return self[(j-1)*8 + i]
+    function Pads:getColor(i,j)
+        return self.color[(j-1)*8 + i]
     end
 
-    function Pads:set(i,j,x)
-        self[(j-1)*8 + i] = x
+    function Pads:setColor(i,j,x)
+        self.color[(j-1)*8 + i] = x
     end
 
-    function Pads:delta(nextPads)
+    function Pads:getPressed(i,j)
+        return self.pressed[(j-1)*8 + i]
+    end
+
+    --- Changes to send to controller to go from current state to nextPads state
+    --  or pass nil to flush ( ie send full state to controller )
+    function Pads:delta(nextPads) 
         local delta = {}
         for i=1,8 do
             for j=1,8 do
-                local nv = nextPads.get(i,j)
-                if nv != self.get(i,j) then
-                    delta[#delta+1] = {i, j, nv}
+                if nextPads then
+                    local nv = nextPads.getColor(i,j)
+                    if nv != self.getColor(i,j) then
+                        delta[#delta+1] = {i, j, nv}
+                    end
+                else --Flush the state
+                    delta[#delta+1] = {i, j, self.getColor(i,j)}
                 end
             end
         end
@@ -64,19 +77,28 @@ function Push.newPushState()
     
     --------------------------------
     ---Top row ( "selection control" row)
-    local TopRow = {}
+    local TopRow   = {}
+    TopRow.color   = {}
+    TopRow.pressed = {}
     PushState.TopRow = TopRow
 
     for i=1,8 do
-        TopRow[#TopRow+1] = Push.Colors.TopRowColors.Black
+        TopRow.color[#TopRow.color+1]   = Push.Colors.TopRowColors.Black
+        TopRow.pressed[#TopRow.pressed+1] = 0
     end
 
+    --- Changes to send to controller to go from current state to nextTopRow state
+    --  or pass nil to flush ( ie send full state to controller )
     function TopRow:delta(nextTopRow)
         local delta = {}
         for i=1,8 do
-            local nv = nextTopRow[i]
-            if nv != self[i] then
-                delta[#delta+1] = {i, nv}
+            if nextTopRow then
+                local nv = nextTopRow.color[i]
+                if nv != self.color[i] then
+                    delta[#delta+1] = {i, nv}
+                end
+            else -- Flush the state
+                delta[#delta+1] = {i, self.color[i]}
             end
         end
         return delta
@@ -86,6 +108,35 @@ function Push.newPushState()
     PushState.BottomRow = Push.deepCopy(PushState.TopRow) --Cheap shot but effective
 
     --------------------------------
+    -- Scene buttons
+    local SceneButtons     = {}
+    PushState.SceneButtons = SceneButtons
+    SceneButtons.color     = {}
+    SceneButtons.pushed    = {}
+    SceneButtons.midiNum   = {36, 37, 38, 39, 40}
+
+    for i=1,8 do
+        SceneButtons.color[#SceneButtons.color+1]     = Push.Colors.SceneColors.Red
+        SceneButtons.pressed[#SceneButtons.pressed+1] = 0
+    end
+
+    --- Changes to send to controller to go from current state to nextSceneButtons state
+    --  or pass nil to flush ( ie send full state to controller )
+    function SceneButtons:delta(nextSceneButtons)
+        local delta = {}
+        for i=1,8 do
+            if nextSceneButtons then
+                local nv = nextSceneButtons.color[i]
+                if nv != self.color[i] then
+                    delta[#delta+1] = {i, nv}
+                end
+            else -- Flush the state
+                delta[#delta+1] = {i, self.color[i]}
+            end
+        end
+        return delta
+    end
+
     
     function PushState:clone()
         return Push.deepcopy(self)
@@ -98,7 +149,8 @@ function Push.newPushState()
 
         for k, v in next, self, nil do
             if type(v) == 'table' then
-                delta[k] = self[k]:delta(nextState[k])
+                ns = nextState and nextState[k] or nil
+                delta[k] = self[k]:delta(ns)
             end
         end
     end
