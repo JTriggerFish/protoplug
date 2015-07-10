@@ -65,7 +65,7 @@ PushColors.PadColors = {
     MagentaPink = 56,
     PinkHi = 57,
     Pink = 58,
-    PinkLo = 59,
+    PinkLo = 59
 }
 
 --- PushColors.TopRowColors : colors for the first row ( selection control )
@@ -95,7 +95,7 @@ PushColors.TopRowColors = {
     GreenLoBlinkFast = 21,
     GreenHi = 22,
     GreenHiBlink = 23,
-    GreenHiBlinkFast = 24,
+    GreenHiBlinkFast = 24
 }
 --- PushColors.SceneColors : colors for the scene ( vertical right ) buttons
 PushColors.SceneColors = {
@@ -122,7 +122,7 @@ PushColors.SceneColors = {
     GreenBlinkFast = 21,
     GreenHi = 22,
     GreenHiBlink = 23,
-    GreenHiBlinkFast = 24,
+    GreenHiBlinkFast = 24
 }
 
 return PushColors
