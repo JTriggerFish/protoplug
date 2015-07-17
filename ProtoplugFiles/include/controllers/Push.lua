@@ -62,21 +62,27 @@ function Push.newPushState()
     --  or pass nil to flush ( ie send full state to controller )
     function Pads:delta(nextPads) 
         local delta = {}
+        delta.list  = {}
         for i=1,8 do
             for j=1,8 do
                 if nextPads then
                     local nv = nextPads.getColor(i,j)
                     if nv != self.getColor(i,j) then
-                        delta[#delta+1] = {i, j, nv}
+                        delta.list[#(delta.list)+1] = {i, j, nv}
                     end
                 else --Flush the state
-                    delta[#delta+1] = {i, j, self.getColor(i,j)}
+                    delta.list[#(delta.list)+1] = {i, j, self.getColor(i,j)}
                 end
             end
         end
+
+        function delta.changeToEvent(change)
+            return midi.Event.noteOn(1, 35 + change[1] + (change[2]-1)*8, change[2])
+        end
+
         return delta
     end
-    
+
     --------------------------------
     ---Top row ( "selection control" row)
     local TopRow   = {}
@@ -103,11 +109,37 @@ function Push.newPushState()
                 delta[#delta+1] = {i, self.color[i]}
             end
         end
+
+        function delta.changeToEvent(change)
+            return midi.Event.control(19+change[1], change[2], 1)
+        end
+
         return delta
     end
 
     ---Bottom row ( "State Control" row )
     PushState.BottomRow = Push.deepCopy(PushState.TopRow) --Cheap shot but effective
+
+    function PushState.BottomRow:delta(nextBottomRow) --But we still have to redifine this function because of delta.changeToEvent. this could be improved
+        local delta = {}
+        for i=1,8 do
+            if nextBottomRow then
+                local nv = nextBottomRow.color[i]
+                if nv != self.color[i] then
+                    delta[#delta+1] = {i, nv}
+                end
+            else -- Flush the state
+                delta[#delta+1] = {i, self.color[i]}
+            end
+        end
+
+        function delta.changeToEvent(change)
+            return midi.Event.control(101+change[1], change[2], 1)
+        end
+
+        return delta
+    end
+    
 
     --------------------------------
     -- Scene buttons
@@ -212,4 +244,60 @@ function Push.newPushState()
 
     return PushState
 end
+
+function Push.sendUpdateToController(deviceHandle, updateTable)
+    local outBuffer        = deviceHandle.output:getMidiBuffer()
+    local displayOutBuffer = deviceHandle.displayOutput:getMidiBuffer()
+
+    for changeType, changes in pairs(updateTable) do
+        local buffer = (changeType == 'Display') and displayOutBuffer or outBuffer
+        for _, change in ipairs(changes.list) do
+            buffer:addEvent(changes.changeToEvent(change))
+        end
+    end
+end
+
+function Push.setupController()
+    local inputDevices   = midi.MidiInput.getDevices()
+    local outputDevices  = midi.MidiOutput.getDeives()
+    local iIndexController, oIndexController
+    local oIndexDisplay
+
+    local deviceHandle = {}
+
+    for i,v in ipairs(inputDevices) do
+        if v:find("User Port") then
+            iIndexController = i
+        end
+    end
+
+    for i,v in ipairs(outputDevices) do
+        if v:find("User Port") then
+            oIndexController = i
+        elseif v:find("Live Port") then
+            oIndexDisplay = i
+        end
+    end
+
+    if not iIndexController then error("Could not find Push User input port, check Push is properly connected") end
+    if not oIndexController then error("Could not find Push User output port, check Push is properly connected") end
+    if not oIndexDisplay    then error("Could not find Push Live output port, check Push is properly connected") end
+
+    deviceHandle.input         = midi.MidiInput.openDevice(iIndexController-1) 
+    deviceHandle.output        = midi.MidiOutput.openDevice(oIndexController-1) 
+    deviceHandle.displayOutput = midi.MidiOutput.openDevice(oIndexDisplay-1) 
+
+    local initState = Push.newPushState()
+
+    function deviceHandle:flushState(state)
+        allChanges = state:delta(nil)
+        Push.sendUpdateToController(self, allChanges)
+    end
+
+    deviceHandle:flushState(iniState)
+
+    return deviceHandle, initState
+end
+
+return Push
 
