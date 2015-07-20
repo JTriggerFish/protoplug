@@ -49,6 +49,7 @@ PushDisplay.printLine = function(lineNum, _text, padLeft)
         i = i + 1
     end
 
+    --TODO check channel ?
     addToMsg(termination)
 
     return event

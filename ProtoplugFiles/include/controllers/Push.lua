@@ -120,7 +120,7 @@ function Push.newPushState()
     ---Bottom row ( "State Control" row )
     PushState.BottomRow = Push.deepCopy(PushState.TopRow) --Cheap shot but effective
 
-    function PushState.BottomRow:delta(nextBottomRow) --But we still have to redifine this function because of delta.changeToEvent. this could be improved
+    function PushState.BottomRow:delta(nextBottomRow) --But we still have to redefine this function because of delta.changeToEvent. This could be improved
         local delta = {}
         for i=1,8 do
             if nextBottomRow then
@@ -168,6 +168,11 @@ function Push.newPushState()
                 delta[#delta+1] = {i, self.color[i]}
             end
         end
+
+        function delta.changeToEvent(change)
+            return midi.Event.control(SceneButtons.midiNum[change[1]], change[2], 1)
+        end
+
         return delta
     end
 
@@ -195,6 +200,11 @@ function Push.newPushState()
                 delta[#delta+1] = {k, self.color[k]}
             end
         end
+
+        function delta.changeToEvent(change)
+            return midi.Event.control(change[1], change[2], 1)
+        end
+
         return delta
     end
 
@@ -205,7 +215,7 @@ function Push.newPushState()
     --
     local Display = {}
     PushState.Display = Display
-    Display.lines = {}  = {"Welcome to our awesome drum seq", "", "", ""}
+    Display.lines = {}  = {"Welcome to Protoplug", "", "", ""}
 
     function Display:delta(nextDisplayState)
         local delta = {}
@@ -219,6 +229,12 @@ function Push.newPushState()
                 delta[#delta+1] = {i, l}
             end
         end
+
+        function delta.changeToEvent(change)
+            return PushDisplay.printLine(change[1], change[2])
+        end
+
+        return delta
     end
     
     -------------------------------
