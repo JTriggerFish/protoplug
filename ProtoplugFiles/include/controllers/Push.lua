@@ -252,7 +252,7 @@ function Push.newPushState()
 
         for k, v in next, self, nil do
             if type(v) == 'table' then
-                ns = nextState and nextState[k] or nil
+                local ns = nextState and nextState[k] or nil
                 delta[k] = self[k]:delta(ns)
             end
         end
@@ -274,6 +274,7 @@ function Push.sendUpdateToController(deviceHandle, updateTable)
 end
 
 function Push.setupController()
+
     local inputDevices   = midi.MidiInput.getDevices()
     local outputDevices  = midi.MidiOutput.getDeives()
     local iIndexController, oIndexController
@@ -299,20 +300,54 @@ function Push.setupController()
     if not oIndexController then error("Could not find Push User output port, check Push is properly connected") end
     if not oIndexDisplay    then error("Could not find Push Live output port, check Push is properly connected") end
 
-    deviceHandle.input         = midi.MidiInput.openDevice(iIndexController-1) 
-    deviceHandle.output        = midi.MidiOutput.openDevice(oIndexController-1) 
-    deviceHandle.displayOutput = midi.MidiOutput.openDevice(oIndexDisplay-1) 
-
-    local initState = Push.newPushState()
+    deviceHandle.input          = midi.MidiInput.openDevice(iIndexController-1) 
+    deviceHandle.output         = midi.MidiOutput.openDevice(oIndexController-1) 
+    deviceHandle.displayOutput  = midi.MidiOutput.openDevice(oIndexDisplay-1) 
+    deviceHandle.state          = Push.newPushState() 
+    deviceHandle.pendingChanges = {}
 
     function deviceHandle:flushState(state)
-        allChanges = state:delta(nil)
+        local allChanges = state:delta(nil)
         Push.sendUpdateToController(self, allChanges)
+        self.pendingChanges = {}
     end
 
-    deviceHandle:flushState(iniState)
+    function deviceHandle:registerInputHandler(inputEvent, callBack)
+        --TODO !
+    end
 
-    return deviceHandle, initState
+    function deviceHandle:processInput(smax)
+        local inputMidiBuffer = self.input:collectNextBlockOfMessages(smax) 
+        for ev in inputMidiBugger:eachEvent() do
+            --TODO !
+        end
+    end
+
+    function deviceHandle:changePadColor(i, j, newColor)
+        local padChanges = self.pendingChanges.Pads or {}
+        padChanges[#padChanges+1] = {i, j, newColor}
+        self.pendingChanges.Pads = padChanges
+    end
+
+    --TODO other changes ( buttons... )
+
+    function deviceHandle:processOutput()
+        --Send to controller
+        Push.sendUpdateToController(self, self.pendingChanges)
+        --Update state
+        for changeType, changes in pairs(self.pendingChanges) do
+            for i, c in ipairs(changes) do
+                --TODO implement on each state type
+                self.state[changeType]:update(c)
+            end
+        end
+        --Clear pending changes
+        self.pendingChanges = {}
+    end
+
+    deviceHandle:flushState(deviceHandle.state)
+
+    return deviceHandle
 end
 
 return Push
