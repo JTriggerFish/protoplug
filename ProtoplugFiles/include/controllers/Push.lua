@@ -1,11 +1,10 @@
---local midi = require "../core/midi"
---
---
+--midi = require "include/core/midi"
+
 local Push = {}
 
-Push.Colors  = require "PushColors"
-Push.Buttons = require "PushButtons" 
-Push.Display = require "PushDisplay"
+Push.Colors  = require "include/controllers/PushColors"
+Push.Buttons = require "include/controllers/PushButtons" 
+Push.Display = require "include/controllers/PushDisplay"
 
 ---Semi general copy function but kept in this namespace
 --to avoid being blindly used
@@ -42,7 +41,7 @@ function Push.newPushState()
     PushState.Pads = Pads
 
     for i=1,64 do
-        Pads.color[#Pads.color+1]     = Push.Colors.PadsColors.Black
+        Pads.color[#Pads.color+1]     = Push.Colors.PadColors.Black
         Pads.pressed[#Pads.pressed+1] = 0
     end
 
@@ -66,12 +65,12 @@ function Push.newPushState()
         for i=1,8 do
             for j=1,8 do
                 if nextPads then
-                    local nv = nextPads.getColor(i,j)
-                    if nv != self.getColor(i,j) then
+                    local nv = nextPads:getColor(i,j)
+                    if nv ~= self:getColor(i,j) then
                         delta.list[#(delta.list)+1] = {i, j, nv}
                     end
                 else --Flush the state
-                    delta.list[#(delta.list)+1] = {i, j, self.getColor(i,j)}
+                    delta.list[#(delta.list)+1] = {i, j, self:getColor(i,j)}
                 end
             end
         end
@@ -102,7 +101,7 @@ function Push.newPushState()
         for i=1,8 do
             if nextTopRow then
                 local nv = nextTopRow.color[i]
-                if nv != self.color[i] then
+                if nv ~= self.color[i] then
                     delta[#delta+1] = {i, nv}
                 end
             else -- Flush the state
@@ -118,14 +117,14 @@ function Push.newPushState()
     end
 
     ---Bottom row ( "State Control" row )
-    PushState.BottomRow = Push.deepCopy(PushState.TopRow) --Cheap shot but effective
+    PushState.BottomRow = Push.deepcopy(PushState.TopRow) --Cheap shot but effective
 
     function PushState.BottomRow:delta(nextBottomRow) --But we still have to redefine this function because of delta.changeToEvent. This could be improved
         local delta = {}
         for i=1,8 do
             if nextBottomRow then
                 local nv = nextBottomRow.color[i]
-                if nv != self.color[i] then
+                if nv ~= self.color[i] then
                     delta[#delta+1] = {i, nv}
                 end
             else -- Flush the state
@@ -151,7 +150,7 @@ function Push.newPushState()
 
     for i=1,8 do
         SceneButtons.color[#SceneButtons.color+1]     = Push.Colors.SceneColors.Red
-        SceneButtons.pressed[#SceneButtons.pressed+1] = 0
+        SceneButtons.pushed[#SceneButtons.pushed+1] = 0
     end
 
     --- Changes to send to controller to go from current state to nextSceneButtons state
@@ -161,7 +160,7 @@ function Push.newPushState()
         for i=1,8 do
             if nextSceneButtons then
                 local nv = nextSceneButtons.color[i]
-                if nv != self.color[i] then
+                if nv ~= self.color[i] then
                     delta[#delta+1] = {i, nv}
                 end
             else -- Flush the state
@@ -180,11 +179,11 @@ function Push.newPushState()
     -- All other buttons
     local Buttons     = {}
     PushState.Buttons = Buttons
-    Buttons.colors    = {}
+    Buttons.color     = {}
     Buttons.pushed    = {}
 
     for _,k  in ipairs(Push.Buttons.All) do
-        Buttons.colors[k] = Push.Buttons.States.Off
+        Buttons.color[k]  = Push.Buttons.States.Off
         Buttons.pushed[k] = 0
     end
 
@@ -193,7 +192,7 @@ function Push.newPushState()
         for _,k in ipairs(Push.Buttons.All) do
             if nextButtons then
                 local nv = nextSceneButtons.color[k]
-                if nv != self.color[k] then
+                if nv ~= self.color[k] then
                     delta[#delta+1] = {k, nv}
                 end
             else -- Flush the state
@@ -215,14 +214,14 @@ function Push.newPushState()
     --
     local Display = {}
     PushState.Display = Display
-    Display.lines = {}  = {"Welcome to Protoplug", "", "", ""}
+    Display.lines = {"Welcome to Protoplug", "", "", ""}
 
     function Display:delta(nextDisplayState)
         local delta = {}
         for i,l in ipairs(Display.lines) do
             if nextDisplayState then
                 local nv = nextDisplayState.lines[i]
-                if nv != l then
+                if nv ~= l then
                     delta[#delta+1] = {i, nv}
                 end
             else -- Flush the state
@@ -262,13 +261,16 @@ function Push.newPushState()
 end
 
 function Push.sendUpdateToController(deviceHandle, updateTable)
+    if not updateTable then
+        return
+    end
     local outBuffer        = deviceHandle.output:getMidiBuffer()
     local displayOutBuffer = deviceHandle.displayOutput:getMidiBuffer()
 
     for changeType, changes in pairs(updateTable) do
         local buffer = (changeType == 'Display') and displayOutBuffer or outBuffer
-        for _, change in ipairs(changes.list) do
-            buffer:addEvent(changes.changeToEvent(change))
+        for _, change in ipairs(changes) do
+            buffer:addEvent(change.changeToEvent(change))
         end
     end
 end
@@ -276,7 +278,7 @@ end
 function Push.setupController()
 
     local inputDevices   = midi.MidiInput.getDevices()
-    local outputDevices  = midi.MidiOutput.getDeives()
+    local outputDevices  = midi.MidiOutput.getDevices()
     local iIndexController, oIndexController
     local oIndexDisplay
 
@@ -318,7 +320,7 @@ function Push.setupController()
 
     function deviceHandle:processInput(smax)
         local inputMidiBuffer = self.input:collectNextBlockOfMessages(smax) 
-        for ev in inputMidiBugger:eachEvent() do
+        for ev in inputMidiBuffer:eachEvent() do
             --TODO !
         end
     end

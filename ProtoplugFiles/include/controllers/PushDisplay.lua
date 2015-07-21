@@ -1,4 +1,4 @@
-local midi = require "core/midi"
+--midi = require "include/core/midi"
 local PushDisplay = {}
 
 ---Return a midi.Event containing the sysex message required to print the message on 

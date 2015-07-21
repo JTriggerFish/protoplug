@@ -1,5 +1,5 @@
 require "include/protoplug"
-
+Push = require "include/controllers/Push"
 
 local pushControllerHandle = Push.setupController()
 
@@ -22,21 +22,21 @@ local blinkRow   = 1
 local blinkCol   = 1
 local direction  = 1
 
-local blinkColorOn  = PushColors.PadColors.Lime
-local blinkColorOff = PushColors.PadColors.Black
+local blinkColorOn  = Push.Colors.PadColors.Lime
+local blinkColorOff = Push.Colors.PadColors.Black
 
 pushControllerHandle:changePadColor(blinkRow, blinkCol, blinkColorOn)
 
 function plugin.processBlock(samples, smax, midiBuf)
     pushControllerHandle:processInput(smax)
 
-    local nextEventSample = timer.nextEventSample(plugin.getSampleRate(), smax)
+    local nextEventSample = timer(plugin.getSampleRate(), smax)
 
     if nextEventSample < smax then
         pushControllerHandle:changePadColor(blinkRow, blinkCol, blinkColorOff)
         
         blinkCol = blinkCol + direction
-
+        
         if blinkCol > 8 then
             blinkCol  = 7
             direction = -1

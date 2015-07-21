@@ -1,6 +1,6 @@
 local PushButtons =  {}
 
-PushButons.All = {
+PushButtons.All = {
     'Tap',
     'Metronome',
     'Master',
