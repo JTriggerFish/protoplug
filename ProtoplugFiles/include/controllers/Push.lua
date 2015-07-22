@@ -82,6 +82,10 @@ function Push.newPushState()
         return delta
     end
 
+    function Pads:update(change)
+        self:setColor(change[1], change[2], change[3])
+    end
+
     --------------------------------
     ---Top row ( "selection control" row)
     local TopRow   = {}
@@ -98,14 +102,15 @@ function Push.newPushState()
     --  or pass nil to flush ( ie send full state to controller )
     function TopRow:delta(nextTopRow)
         local delta = {}
+        delta.list  = {}
         for i=1,8 do
             if nextTopRow then
                 local nv = nextTopRow.color[i]
                 if nv ~= self.color[i] then
-                    delta[#delta+1] = {i, nv}
+                    delta.list[#delta.list+1] = {i, nv}
                 end
             else -- Flush the state
-                delta[#delta+1] = {i, self.color[i]}
+                delta.list[#delta.list+1] = {i, self.color[i]}
             end
         end
 
@@ -116,19 +121,24 @@ function Push.newPushState()
         return delta
     end
 
+    function TopRow:update(change)
+        self.color[change[1]] = change[2]
+    end
+
     ---Bottom row ( "State Control" row )
     PushState.BottomRow = Push.deepcopy(PushState.TopRow) --Cheap shot but effective
 
     function PushState.BottomRow:delta(nextBottomRow) --But we still have to redefine this function because of delta.changeToEvent. This could be improved
         local delta = {}
+        delta.list  = {}
         for i=1,8 do
             if nextBottomRow then
                 local nv = nextBottomRow.color[i]
                 if nv ~= self.color[i] then
-                    delta[#delta+1] = {i, nv}
+                    delta.list[#delta.list+1] = {i, nv}
                 end
             else -- Flush the state
-                delta[#delta+1] = {i, self.color[i]}
+                delta.list[#delta.list+1] = {i, self.color[i]}
             end
         end
 
@@ -157,14 +167,15 @@ function Push.newPushState()
     --  or pass nil to flush ( ie send full state to controller )
     function SceneButtons:delta(nextSceneButtons)
         local delta = {}
+        delta.list  = {}
         for i=1,8 do
             if nextSceneButtons then
                 local nv = nextSceneButtons.color[i]
                 if nv ~= self.color[i] then
-                    delta[#delta+1] = {i, nv}
+                    delta.list[#delta.list+1] = {i, nv}
                 end
             else -- Flush the state
-                delta[#delta+1] = {i, self.color[i]}
+                delta.list[#delta.list+1] = {i, self.color[i]}
             end
         end
 
@@ -173,6 +184,10 @@ function Push.newPushState()
         end
 
         return delta
+    end
+
+    function SceneButtons:update(change)
+        self.color[change[1]] = change[2]
     end
 
     --------------------------------
@@ -189,14 +204,15 @@ function Push.newPushState()
 
     function Buttons:delta(nextButtons)
         local delta = {}
+        delta.list  = {}
         for _,k in ipairs(Push.Buttons.All) do
             if nextButtons then
                 local nv = nextSceneButtons.color[k]
                 if nv ~= self.color[k] then
-                    delta[#delta+1] = {k, nv}
+                    delta.list[#delta.list+1] = {k, nv}
                 end
             else -- Flush the state
-                delta[#delta+1] = {k, self.color[k]}
+                delta.list[#delta.list+1] = {k, self.color[k]}
             end
         end
 
@@ -205,6 +221,10 @@ function Push.newPushState()
         end
 
         return delta
+    end
+
+    function Buttons:update(change)
+        self.color[change[1]] = change[2]
     end
 
     --------------------------------
@@ -218,14 +238,15 @@ function Push.newPushState()
 
     function Display:delta(nextDisplayState)
         local delta = {}
+        delta.list  = {}
         for i,l in ipairs(Display.lines) do
             if nextDisplayState then
                 local nv = nextDisplayState.lines[i]
                 if nv ~= l then
-                    delta[#delta+1] = {i, nv}
+                    delta.list[#delta.list+1] = {i, nv}
                 end
             else -- Flush the state
-                delta[#delta+1] = {i, l}
+                delta.list[#delta.list+1] = {i, l}
             end
         end
 
@@ -234,6 +255,10 @@ function Push.newPushState()
         end
 
         return delta
+    end
+
+    function Display:update(change)
+        self.lines[change[1]] = change[2]
     end
     
     -------------------------------
@@ -248,8 +273,12 @@ function Push.newPushState()
     --to next state
     function PushState:delta(nextState)
         local delta = {}
+        print("State delta")
+        print("nextState: " .. tostring(nextState))
 
         for k, v in next, self, nil do
+            print("delta key: " ..k)
+            print("delta val: " ..tostring(v))
             if type(v) == 'table' then
                 local ns = nextState and nextState[k] or nil
                 delta[k] = self[k]:delta(ns)
@@ -261,6 +290,8 @@ function Push.newPushState()
 end
 
 function Push.sendUpdateToController(deviceHandle, updateTable)
+    print("Send update to controller")
+
     if not updateTable then
         return
     end
@@ -269,8 +300,16 @@ function Push.sendUpdateToController(deviceHandle, updateTable)
 
     for changeType, changes in pairs(updateTable) do
         local buffer = (changeType == 'Display') and displayOutBuffer or outBuffer
-        for _, change in ipairs(changes) do
-            buffer:addEvent(change.changeToEvent(change))
+
+        print(changeType)
+        for k, v in pairs(changes) do
+            print("--- " .. k)
+            print("--- " .. v)
+        end
+        print(changes)
+
+        for _, change in ipairs(changes.list) do
+            buffer:addEvent(changes.changeToEvent(change))
         end
     end
 end
@@ -317,7 +356,6 @@ function Push.setupController()
     function deviceHandle:registerInputHandler(inputEvent, callBack)
         --TODO !
     end
-
     function deviceHandle:processInput(smax)
         local inputMidiBuffer = self.input:collectNextBlockOfMessages(smax) 
         for ev in inputMidiBuffer:eachEvent() do
@@ -339,7 +377,6 @@ function Push.setupController()
         --Update state
         for changeType, changes in pairs(self.pendingChanges) do
             for i, c in ipairs(changes) do
-                --TODO implement on each state type
                 self.state[changeType]:update(c)
             end
         end
