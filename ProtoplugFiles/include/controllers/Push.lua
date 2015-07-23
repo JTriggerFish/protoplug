@@ -29,6 +29,30 @@ function Push.deepcopy(o, seen)
     return no
 end
 
+------[[ Midi mapping functions from a change to a midi event ]]-------
+Push.changeToEvent = {}
+function Push.changeToEvent.Pads(change)
+    return midi.Event.noteOn(1, 35 + change[1] + (change[2]-1)*8, change[2])
+end
+function Push.changeToEvent.TopRow(change)
+    return midi.Event.control(1,19+change[1], change[2])
+end
+function Push.changeToEvent.BottomRow(change)
+    return midi.Event.control(1, 101+change[1], change[2])
+end
+Push.SceneButtonsMidiNum   = {36, 37, 38, 39, 40, 41, 42, 43}
+function Push.changeToEvent.SceneButtons(change)
+    return midi.Event.control(1, Push.SceneButtonsMidiNum[change[1]], change[2])
+end
+function Push.changeToEvent.Buttons(change)
+    return midi.Event.control(1, change[1], change[2])
+end
+function Push.changeToEvent.Display(change)
+    return Push.Display.printLine(change[1], change[2])
+end
+--TODO : Ribbon
+------------------------------------------------------------------------
+
 function Push.newPushState()
     --- PushState: table representing the state that the controller is currently into ( what lights are on, what buttons are pressed ... )
     --
@@ -39,6 +63,7 @@ function Push.newPushState()
     Pads.color    = {}
     Pads.pressed  = {}
     PushState.Pads = Pads
+
 
     for i=1,64 do
         Pads.color[#Pads.color+1]     = Push.Colors.PadColors.Black
@@ -61,22 +86,18 @@ function Push.newPushState()
     --  or pass nil to flush ( ie send full state to controller )
     function Pads:delta(nextPads) 
         local delta = {}
-        delta.list  = {}
+        delta  = {}
         for i=1,8 do
             for j=1,8 do
                 if nextPads then
                     local nv = nextPads:getColor(i,j)
                     if nv ~= self:getColor(i,j) then
-                        delta.list[#(delta.list)+1] = {i, j, nv}
+                        delta[#delta+1] = {i, j, nv}
                     end
                 else --Flush the state
-                    delta.list[#(delta.list)+1] = {i, j, self:getColor(i,j)}
+                    delta[#delta+1] = {i, j, self:getColor(i,j)}
                 end
             end
-        end
-
-        function delta.changeToEvent(change)
-            return midi.Event.noteOn(1, 35 + change[1] + (change[2]-1)*8, change[2])
         end
 
         return delta
@@ -102,20 +123,16 @@ function Push.newPushState()
     --  or pass nil to flush ( ie send full state to controller )
     function TopRow:delta(nextTopRow)
         local delta = {}
-        delta.list  = {}
+        delta  = {}
         for i=1,8 do
             if nextTopRow then
                 local nv = nextTopRow.color[i]
                 if nv ~= self.color[i] then
-                    delta.list[#delta.list+1] = {i, nv}
+                    delta[#delta+1] = {i, nv}
                 end
             else -- Flush the state
-                delta.list[#delta.list+1] = {i, self.color[i]}
+                delta[#delta+1] = {i, self.color[i]}
             end
-        end
-
-        function delta.changeToEvent(change)
-            return midi.Event.control(19+change[1], change[2], 1)
         end
 
         return delta
@@ -128,27 +145,6 @@ function Push.newPushState()
     ---Bottom row ( "State Control" row )
     PushState.BottomRow = Push.deepcopy(PushState.TopRow) --Cheap shot but effective
 
-    function PushState.BottomRow:delta(nextBottomRow) --But we still have to redefine this function because of delta.changeToEvent. This could be improved
-        local delta = {}
-        delta.list  = {}
-        for i=1,8 do
-            if nextBottomRow then
-                local nv = nextBottomRow.color[i]
-                if nv ~= self.color[i] then
-                    delta.list[#delta.list+1] = {i, nv}
-                end
-            else -- Flush the state
-                delta.list[#delta.list+1] = {i, self.color[i]}
-            end
-        end
-
-        function delta.changeToEvent(change)
-            return midi.Event.control(101+change[1], change[2], 1)
-        end
-
-        return delta
-    end
-    
 
     --------------------------------
     -- Scene buttons
@@ -156,7 +152,6 @@ function Push.newPushState()
     PushState.SceneButtons = SceneButtons
     SceneButtons.color     = {}
     SceneButtons.pushed    = {}
-    SceneButtons.midiNum   = {36, 37, 38, 39, 40, 41, 42, 43}
 
     for i=1,8 do
         SceneButtons.color[#SceneButtons.color+1]     = Push.Colors.SceneColors.Red
@@ -167,20 +162,16 @@ function Push.newPushState()
     --  or pass nil to flush ( ie send full state to controller )
     function SceneButtons:delta(nextSceneButtons)
         local delta = {}
-        delta.list  = {}
+        delta  = {}
         for i=1,8 do
             if nextSceneButtons then
                 local nv = nextSceneButtons.color[i]
                 if nv ~= self.color[i] then
-                    delta.list[#delta.list+1] = {i, nv}
+                    delta[#delta+1] = {i, nv}
                 end
             else -- Flush the state
-                delta.list[#delta.list+1] = {i, self.color[i]}
+                delta[#delta+1] = {i, self.color[i]}
             end
-        end
-
-        function delta.changeToEvent(change)
-            return midi.Event.control(SceneButtons.midiNum[change[1]], change[2], 1)
         end
 
         return delta
@@ -204,20 +195,16 @@ function Push.newPushState()
 
     function Buttons:delta(nextButtons)
         local delta = {}
-        delta.list  = {}
+        delta  = {}
         for _,k in ipairs(Push.Buttons.All) do
             if nextButtons then
                 local nv = nextSceneButtons.color[k]
                 if nv ~= self.color[k] then
-                    delta.list[#delta.list+1] = {k, nv}
+                    delta[#delta+1] = {Push.Buttons.MidiMap[k], nv}
                 end
             else -- Flush the state
-                delta.list[#delta.list+1] = {k, self.color[k]}
+                delta[#delta+1] = {Push.Buttons.MidiMap[k], self.color[k]}
             end
-        end
-
-        function delta.changeToEvent(change)
-            return midi.Event.control(change[1], change[2], 1)
         end
 
         return delta
@@ -238,20 +225,16 @@ function Push.newPushState()
 
     function Display:delta(nextDisplayState)
         local delta = {}
-        delta.list  = {}
+        delta  = {}
         for i,l in ipairs(Display.lines) do
             if nextDisplayState then
                 local nv = nextDisplayState.lines[i]
                 if nv ~= l then
-                    delta.list[#delta.list+1] = {i, nv}
+                    delta[#delta+1] = {i, nv}
                 end
             else -- Flush the state
-                delta.list[#delta.list+1] = {i, l}
+                delta[#delta+1] = {i, l}
             end
-        end
-
-        function delta.changeToEvent(change)
-            return PushDisplay.printLine(change[1], change[2])
         end
 
         return delta
@@ -273,45 +256,32 @@ function Push.newPushState()
     --to next state
     function PushState:delta(nextState)
         local delta = {}
-        print("State delta")
-        print("nextState: " .. tostring(nextState))
 
         for k, v in next, self, nil do
-            print("delta key: " ..k)
-            print("delta val: " ..tostring(v))
             if type(v) == 'table' then
                 local ns = nextState and nextState[k] or nil
                 delta[k] = self[k]:delta(ns)
             end
         end
+        return delta
     end
 
     return PushState
 end
 
-function Push.sendUpdateToController(deviceHandle, updateTable)
-    print("Send update to controller")
-
-    if not updateTable then
-        return
-    end
+function Push.sendUpdateToController(deviceHandle, updateTable, sampleRate)
     local outBuffer        = deviceHandle.output:getMidiBuffer()
     local displayOutBuffer = deviceHandle.displayOutput:getMidiBuffer()
 
     for changeType, changes in pairs(updateTable) do
         local buffer = (changeType == 'Display') and displayOutBuffer or outBuffer
 
-        print(changeType)
-        for k, v in pairs(changes) do
-            print("--- " .. k)
-            print("--- " .. v)
-        end
-        print(changes)
-
-        for _, change in ipairs(changes.list) do
-            buffer:addEvent(changes.changeToEvent(change))
+        for _, change in ipairs(changes) do
+            buffer:addEvent((Push.changeToEvent[changeType])(change))
         end
     end
+    deviceHandle.output:sendMessagesFromBuffer(sampleRate)
+    deviceHandle.displayOutput:sendMessagesFromBuffer(sampleRate)
 end
 
 function Push.setupController()
@@ -347,9 +317,9 @@ function Push.setupController()
     deviceHandle.state          = Push.newPushState() 
     deviceHandle.pendingChanges = {}
 
-    function deviceHandle:flushState(state)
+    function deviceHandle:flushState(state, sampleRate)
         local allChanges = state:delta(nil)
-        Push.sendUpdateToController(self, allChanges)
+        Push.sendUpdateToController(self, allChanges, sampleRate)
         self.pendingChanges = {}
     end
 
@@ -371,9 +341,9 @@ function Push.setupController()
 
     --TODO other changes ( buttons... )
 
-    function deviceHandle:processOutput()
+    function deviceHandle:processOutput(sampleRate)
         --Send to controller
-        Push.sendUpdateToController(self, self.pendingChanges)
+        Push.sendUpdateToController(self, self.pendingChanges, sampleRate)
         --Update state
         for changeType, changes in pairs(self.pendingChanges) do
             for i, c in ipairs(changes) do
@@ -384,7 +354,7 @@ function Push.setupController()
         self.pendingChanges = {}
     end
 
-    deviceHandle:flushState(deviceHandle.state)
+    deviceHandle:flushState(deviceHandle.state, 44100)
 
     return deviceHandle
 end

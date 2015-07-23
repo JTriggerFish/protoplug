@@ -48,7 +48,7 @@ function plugin.processBlock(samples, smax, midiBuf)
         pushControllerHandle:changePadColor(blinkRow, blinkCol, blinkColorOn)
     end
 
-    pushControllerHandle:processOutput()
+    pushControllerHandle:processOutput(plugin.getSampleRate())
 
 end
 
