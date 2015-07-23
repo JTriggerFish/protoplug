@@ -18,7 +18,7 @@ end
 
 local timer = createTimer(0.5)
 
-local blinkRow   = 1
+local blinkRow   = 8
 local blinkCol   = 1
 local direction  = 1
 
@@ -31,25 +31,25 @@ function plugin.processBlock(samples, smax, midiBuf)
     pushControllerHandle:processInput(smax)
 
     local nextEventSample = timer(plugin.getSampleRate(), smax)
-
-    if nextEventSample < smax then
+    
+    if nextEventSample <= smax then
         pushControllerHandle:changePadColor(blinkRow, blinkCol, blinkColorOff)
         
         blinkCol = blinkCol + direction
-        
+    
+    
         if blinkCol > 8 then
             blinkCol  = 7
             direction = -1
         elseif blinkCol < 1 then
-            blinkCol  = 1
+            blinkCol  = 2
             direction = 1
         end
 
         pushControllerHandle:changePadColor(blinkRow, blinkCol, blinkColorOn)
     end
-
+    
     pushControllerHandle:processOutput(plugin.getSampleRate())
 
 end
-
 

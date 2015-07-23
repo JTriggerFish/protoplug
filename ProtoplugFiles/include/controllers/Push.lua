@@ -32,7 +32,7 @@ end
 ------[[ Midi mapping functions from a change to a midi event ]]-------
 Push.changeToEvent = {}
 function Push.changeToEvent.Pads(change)
-    return midi.Event.noteOn(1, 35 + change[1] + (change[2]-1)*8, change[2])
+    return midi.Event.noteOn(1, 35 + change[2] + (change[1]-1)*8, change[3])
 end
 function Push.changeToEvent.TopRow(change)
     return midi.Event.control(1,19+change[1], change[2])
@@ -189,7 +189,7 @@ function Push.newPushState()
     Buttons.pushed    = {}
 
     for _,k  in ipairs(Push.Buttons.All) do
-        Buttons.color[k]  = Push.Buttons.States.Off
+        Buttons.color[k]  = Push.Buttons.States.On
         Buttons.pushed[k] = 0
     end
 
