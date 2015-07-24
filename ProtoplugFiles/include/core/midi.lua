@@ -430,12 +430,12 @@ function midi.MidiInput.openDevice(deviceIndex)
     local i = {}
     i.pMidiInput = ffi.gc(protolib.openMidiInputDevice(deviceIndex), protolib.MidiInput_delete)
 
-    print("Opened input device successfully")
-
     local errMsg = ffi.string(i.pMidiInput.errMsg)
     if not (errMsg == nil or errMsg == '') then
         error("Could not open device for midi input: "..errMsg)
     end
+
+    print("Opened input device successfully")
 
 
     function i:getMidiBuffer()

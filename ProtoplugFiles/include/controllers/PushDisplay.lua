@@ -35,7 +35,7 @@ PushDisplay.printLine = function(lineNum, _text, padLeft)
     local i = 0
     local addToMsg = function(p)
         for _,v in ipairs(p) do
-            event.data[i] = bit.band(v, 127)
+            event.data[i] = bit.band(v, 255)
             i = i + 1
         end
     end
@@ -49,8 +49,12 @@ PushDisplay.printLine = function(lineNum, _text, padLeft)
         i = i + 1
     end
 
-    --TODO check channel ?
     addToMsg(termination)
+    --[[
+    for i=0, 76 do
+        print(event.data[i])
+    end
+    --]]
 
     return event
 end
