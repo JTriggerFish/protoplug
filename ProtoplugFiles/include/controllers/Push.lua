@@ -266,6 +266,15 @@ function Push.newPushState()
         return delta
     end
 
+    --- Handler for input events ----------------------------------------------------
+    -- input event functions should accept two arguments: the event itself and the Push State.
+    -- Every single function in this list will be called whenver an event happens, and it is up to the function to 
+    -- decide whether it wants to do something with the event or not.
+    -- Thus it is better to register few functions that handle a variety of events rather than say one per pad.
+    -- Note that the ordering matters because functions might be modifying the state - thus higher priority functions
+    -- should be inserted first
+    PushState.inputEventHandlers = {}
+
     return PushState
 end
 
@@ -323,13 +332,16 @@ function Push.setupController()
         self.pendingChanges = {}
     end
 
-    function deviceHandle:registerInputHandler(inputEvent, callBack)
-        --TODO !
+    --Note position shuold be nil in most cases, so that the handler is inserted at the back
+    function deviceHandle:registerInputHandler(callBack, position)
+        table.insert(self.state.inputEventHandlers, callBack)
     end
     function deviceHandle:processInput(smax)
         local inputMidiBuffer = self.input:collectNextBlockOfMessages(smax) 
         for ev in inputMidiBuffer:eachEvent() do
-            --TODO !
+            for _, handler in self.state.inputEventHandlers do
+                handler(ev, self.state)
+            end
         end
     end
 
