@@ -378,6 +378,21 @@ local MidiEvent_mt = {
 			if not self:isControl() then error "not a control event" end
 			return self.data[2]
 		end;
+
+		--- Is an aftertouch event
+		-- @treturn boolean whether event is a aftertouch
+		-- @function Event:isAftertouch
+		isAftertouch = function (self)
+			return (band(self.data[0], 0xf0)==0xa0)
+		end;
+	
+		--- Get aftertouch.
+		-- @return the MIDI aftertouch (0-127)
+		-- @function Event:getAftertouch
+		getAftertouch = function (self)
+			if not self:isAftertouch() then error "not an afertouch event" end
+			return self.data[2]
+		end;
 		
 		debug = function (self)
 			print (tonumber(self.time).." "..

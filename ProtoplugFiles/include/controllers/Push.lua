@@ -256,11 +256,13 @@ function Push.newPushState()
     --to next state
     function PushState:delta(nextState)
         local delta = {}
-
+        
         for k, v in next, self, nil do
             if type(v) == 'table' then
                 local ns = nextState and nextState[k] or nil
-                delta[k] = self[k]:delta(ns)
+                if (self[k].delta) then
+                    delta[k] = self[k]:delta(ns)
+                end
             end
         end
         return delta
@@ -339,7 +341,7 @@ function Push.setupController()
     function deviceHandle:processInput(smax)
         local inputMidiBuffer = self.input:collectNextBlockOfMessages(smax) 
         for ev in inputMidiBuffer:eachEvent() do
-            for _, handler in self.state.inputEventHandlers do
+            for _, handler in ipairs(self.state.inputEventHandlers) do
                 handler(ev, self.state)
             end
         end
@@ -349,6 +351,13 @@ function Push.setupController()
         local padChanges = self.pendingChanges.Pads or {}
         padChanges[#padChanges+1] = {i, j, newColor}
         self.pendingChanges.Pads = padChanges
+    end
+
+    function deviceHandle:changeDisplayLine(i, text)
+        print(tostring(i) .. " : " .. text)
+        local lineChanges = self.pendingChanges.Display or {}
+        lineChanges[#lineChanges+1] = {i, text}
+        self.pendingChanges.Display = lineChanges
     end
 
     --TODO other changes ( buttons... )
