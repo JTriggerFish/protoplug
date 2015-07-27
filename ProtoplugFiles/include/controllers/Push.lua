@@ -354,7 +354,6 @@ function Push.setupController()
     end
 
     function deviceHandle:changeDisplayLine(i, text)
-        print(tostring(i) .. " : " .. text)
         local lineChanges = self.pendingChanges.Display or {}
         lineChanges[#lineChanges+1] = {i, text}
         self.pendingChanges.Display = lineChanges
